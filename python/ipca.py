@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import progressbar
 
 class IPCA():
     def __init__(self, n_factors=1, intercept=False):
@@ -24,18 +25,26 @@ class IPCA():
         # prepare input by checking indices and cleaning data
         X, y, indices, metad = _prep_input(X, y, indices)
         N, L, T = metad["N"], metad["L"], metad["T"]
-
-        print("Number of unique entities (N): ", N)
-        print("Number of unique dates (T): ", T)
-        print("Number of characteristics used as instruments (L): ", L)
         
-        # check that enough characeteristics are provided for the requested number of factors
+        # check that enough characteristics are provided for the requested number of factors
         if np.size(X, axis=1) < self.n_factors:
-            raise ValueError('The number of factors requested (n_factors) exceeds number of features.')
+            raise ValueError('Number of factors requested (n_factors) cannot exceed number of features.')
+
+        # store data
+        self.X, self.y, self.indices = X, y, indices
+
+        # build characteristics-weighted portfolio needed for the optimization of dynamic betas
+        Q, W, val_obs = _build_portfolio(X, y, indices, metad)
+        self.Q, self.W, self.val_obs = Q, W, val_obs
+        self.metad = metad        
+
 
 ########## helper functions ##########
 
-def _prep_input(X, y=None, indices=None):    
+def _prep_input(X, y=None, indices=None): 
+    """
+    Prepares different input types to consistent schema.
+    """   
     # parameter input validation
     if X is None:
         raise ValueError('Must pass panel input data.')
@@ -93,3 +102,65 @@ def _prep_input(X, y=None, indices=None):
     metad["L"] = L
 
     return X, y, indices, metad
+
+def _build_portfolio(X, y, indices, metad):
+    """
+    Converts a stacked panel of data where each row corresponds to an
+    observation (i, t) into a tensor of dimensions (N, L, T) where N is the
+    number of unique entities, L is the number of characteristics and T is
+    the number of unique dates.
+
+    IPCA needs returns interacted with instruments (Q) to solve the optimization problem for dynamic betas.
+
+    Q : matrix of dimensions (L, T), containing the characteristics-weighted portfolios
+    W : matrix of dimensions (L, L, T)
+    val_obs : matrix of dimension (T), containting the number of non missing observations at each point in time
+    """
+    N, L, T = metad["N"], metad["L"], metad["T"]
+
+    print(f"Panel dimensions:\n"
+            f"  Number of unique entities (N): {N}\n"
+            f"  Number of unique dates (T): {T}\n"
+            f"  Number of characteristics used as instruments (L): {L}")
+    
+    # show progress
+    bar = progressbar.ProgressBar(maxval=T,
+                                  widgets=[progressbar.Bar('=', '[', ']'),
+                                           ' ', progressbar.Percentage()])
+    bar.start()
+
+    # initialize portfolio outputs based on given dimensions
+    W = np.full((L, L, T), np.nan)
+    val_obs = np.full((T), np.nan)
+
+    if y is not None:
+        Q = np.full((L, T), np.nan)
+        
+        # for each time t
+        for t in range(T):
+            ixt = (indices[:, 1] == t) # select all observations
+            val_obs[t] = np.sum(ixt) # store number of observations
+
+            """
+            Q: Each element Q_l_t represents a weighted average of returns at time t,
+            for a portfolio whose weights are determined by the value of the assets' characteristic l,
+            normalized by the number of non-missing observations of time t.
+            If the first two characteristics l are e.g. value and capital,
+            then the first rows Q_l are time series of returns managed on the basis of these.
+            """
+            Q[:, t] = X[ixt, :].T.dot(y[ixt])/val_obs[t]
+            W[:, :, t] = X[ixt, :].T.dot(X[ixt, :])/val_obs[t]
+            bar.update(t)
+    # if dependent variable y is None, build the portfolio info for ind vars (?)
+    else:
+        Q = None
+        for t in range(T):
+            ixt = (indices[:, 1] == t)
+            val_obs[t] = np.sum(ixt)
+            W[:, :, t] = X[ixt, :].T.dot(X[ixt, :])/val_obs[t]
+            bar.update(t)
+    
+    bar.finish()
+
+    # return portfolio data
+    return Q, W, val_obs
