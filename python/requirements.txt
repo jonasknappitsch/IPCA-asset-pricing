@@ -1,0 +1,3 @@
+ipca==0.6.7
+numpy==2.2.4
+statsmodels==0.14.4
