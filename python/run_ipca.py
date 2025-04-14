@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import pickle
-from ipca_JK import IPCA
+from ipca import IPCA
 
 # datasets
 from statsmodels.datasets import grunfeld
@@ -11,8 +11,8 @@ import openassetpricing as oap
 # visualization
 import matplotlib.pyplot as plt
 
-def load_data(dataset="grunfeld1950"):
-    if(dataset == "grunfeld1950"):
+def download_data(dataset="grunfeld"):
+    if(dataset == "grunfeld"):
         data = grunfeld.load_pandas().data
 
         ########## preprocessing ##########
@@ -39,16 +39,17 @@ def load_data(dataset="grunfeld1950"):
         X = data.drop('invest', axis=1)
         y = data['invest']
         
-        # lag x by 1 period as required:
-        X_lagged = X.groupby('firm').shift(1).dropna()
-        y_aligned = y.loc[X_lagged.index]
+        # lag x by 1 period if required:
+        # X_lagged = X.groupby('firm').shift(1).dropna()
+        # y_aligned = y.loc[X_lagged.index]
 
         # convert to time-indexed dict(T) as required:
         # Z (dict(T) of df(NxL)): characteristics; can be rank-demeaned
         # R (dict(T) of srs(N); not needed for managed-ptf-only version): asset returns
         Z = {t: df.droplevel('year') for t, df in X.groupby('year')}
         R = {t: s.droplevel('year') for t, s in y.groupby('year')}
-    elif(dataset == "openassetpricing"):
+
+    elif(dataset == "openap"):
         # https://github.com/mk0417/open-asset-pricing-download/blob/master/examples/ML_portfolio_example.ipynb
         
         # download WRDS CRSP return data
@@ -67,7 +68,9 @@ def load_data(dataset="grunfeld1950"):
 
         # download all Chen-Zimmermann predictors
         openap = oap.OpenAP(202408)
-        openap_signals = openap.dl_all_signals('pandas')
+        openap_signals = openap.dl_all_signals('pandas') # download all signals
+        
+        # openap_signals = openap.dl_signal('pandas',['AM','Beta','BM','CF','Mom12m']) # download certain signals of openap.dl_signal_doc('pandas')
 
         # get signal names
         signal_names = [col for col in openap_signals.columns if col not in ["permno", "yyyymm"]]
@@ -78,7 +81,7 @@ def load_data(dataset="grunfeld1950"):
         # lag to ensure return at t is predicted by signals at t+1, assume signal is available for trading end of month (28th)
         openap_signals["date"] = pd.to_datetime(openap_signals["yyyymm"].astype(str) + "28", format="%Y%m%d") + pd.DateOffset(months=1)
 
-        # keep original signal date stored for clarity
+        # keep original signal date stored for clarity and arrange order
         openap_signals = openap_signals.rename(columns={"yyyymm": "signals_date"})
         cols = ["permno","date","signals_date"] + signal_names
         openap_signals = openap_signals[cols]
@@ -92,59 +95,76 @@ def load_data(dataset="grunfeld1950"):
         # merge data by left join return on signals
         data = openap_signals.merge(crsp[["permno", "date", "ret"]], on=["permno", "date"], how="left")
 
-        Z = openap_signals
-        R = crsp
-        
-    elif(dataset == "crsp"):
-        raise NotImplementedError('Dataset not yet supported.')
+        characteristics = [col for col in data.columns if col not in ["ret"]]
+
+        Z = {t: df[characteristics] for t, df in data.groupby("date")}
+        R = {t: s["ret"] for t, s in data.groupby("date")}
     else:
         raise NotImplementedError('No valid dataset selected.')
     
-    with open('data.pkl', 'wb') as outp:
+    with open('input_data.pkl', 'wb') as outp:
         pickle.dump(Z, outp, pickle.HIGHEST_PROTOCOL)
         pickle.dump(R, outp, pickle.HIGHEST_PROTOCOL)
 
     return(Z, R)
 
-K = 1 # specify K
+def preprocessing(Z,R):
+    return(Z, R)
+
+if __name__ == '__main__':
+
+    K = 1 # specify K
     
-# dataset=[grunfeld1950 | crsp | openassetpricing]
-# Z, R = load_data(dataset="grunfeld1950") # load your data here
+    download_input = input("Do you want to download new data (y)?\n")
 
-# read data
-with open('data.pkl', 'rb') as inp:
-    Z = pickle.load(inp)
-    R = pickle.load(inp)
+    if(download_input == "y"):
+        dataset_input = input("Select your desired dataset [grunfeld | openap]:\n")
+        download_data(dataset_input) # load your data here
 
-# IPCA: no anomaly
-ipca_0 = IPCA(Z, R=R, K=K)
-ipca_0.run_ipca(dispIters=True)
+    # read data
+    try:
+        with open('input_data.pkl', 'rb') as inp:
+            Z = pickle.load(inp)
+            R = pickle.load(inp)
+    except:
+        print("Couldn't find suitable data.")
 
-# IPCA: with anomaly
-gFac = pd.DataFrame(1., index=sorted(R.keys()), columns=['anomaly']).T
-ipca_1 = IPCA(Z, R=R, K=K, gFac=gFac)
-ipca_1.run_ipca(dispIters=True)
+    preprocessing(Z,R)
+    """
+    # IPCA: no anomaly
+    ipca_0 = IPCA(Z, R=R, K=K)
+    ipca_0.run_ipca(dispIters=True)
 
-# IPCA: with anomaly and a pre-specified factor
-gFac = pd.DataFrame(1., index=sorted(R.keys()), columns=['anomaly'])
-gFac['mkt'] = pd.Series({key:R[key].mean() for key in gFac.index}) # say we include the equally weighted market
-gFac = gFac.T
-ipca_2 = IPCA(Z, R=R, K=K, gFac=gFac)
-ipca_2.run_ipca(dispIters=True)
+    # IPCA: with anomaly
+    gFac = pd.DataFrame(1., index=sorted(R.keys()), columns=['anomaly']).T
+    ipca_1 = IPCA(Z, R=R, K=K, gFac=gFac)
+    ipca_1.run_ipca(dispIters=True)
 
-########## compare results ##########
+    # IPCA: with anomaly and a pre-specified factor
+    gFac = pd.DataFrame(1., index=sorted(R.keys()), columns=['anomaly'])
+    gFac['mkt'] = pd.Series({key:R[key].mean() for key in gFac.index}) # say we include the equally weighted market
+    gFac = gFac.T
+    ipca_2 = IPCA(Z, R=R, K=K, gFac=gFac)
+    ipca_2.run_ipca(dispIters=True)
 
-"""
-tested: this code reaches same results on grunfield data
-as Kelly's python implementation "https://github.com/bkelly-lab/ipca.git"
-for
-- Gamma
-- Factors
-but different results for
-- R2 (asset, portfolio)
-"""
-print(ipca_0.r2)
-print(ipca_0.Gamma)
-# print(ipca_2.Gamma)
-print(ipca_0.Fac)
-# ipca_2.visualize_factors()
+    ########## compare results ##########
+    """
+    
+
+    """
+    tested: this code reaches same results on grunfield data
+    as Kelly's python implementation "https://github.com/bkelly-lab/ipca.git"
+    for
+    - Gamma
+    - Factors
+    but different results for
+    - R2 (asset, portfolio)
+    """
+
+    """
+    print(ipca_0.r2)
+    print(ipca_0.Gamma)
+    # print(ipca_2.Gamma)
+    print(ipca_0.Fac)
+    # ipca_2.visualize_factors()
+    """
