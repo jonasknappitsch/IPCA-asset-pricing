@@ -95,21 +95,39 @@ def download_data(dataset="grunfeld"):
         # merge data by left join return on signals
         data = openap_signals.merge(crsp[["permno", "date", "ret"]], on=["permno", "date"], how="left")
 
-        characteristics = [col for col in data.columns if col not in ["ret"]]
-
-        Z = {t: df[characteristics] for t, df in data.groupby("date")}
-        R = {t: s["ret"] for t, s in data.groupby("date")}
     else:
         raise NotImplementedError('No valid dataset selected.')
     
-    with open('input_data.pkl', 'wb') as outp:
-        pickle.dump(Z, outp, pickle.HIGHEST_PROTOCOL)
-        pickle.dump(R, outp, pickle.HIGHEST_PROTOCOL)
+    with open('data.pkl', 'wb') as outp:
+        pickle.dump(data, outp, pickle.HIGHEST_PROTOCOL)
 
-    return(Z, R)
+    return(data)
 
-def preprocessing(Z,R):
-    return(Z, R)
+def preprocessing(data, signal_names):
+    """
+    how to deal with missing values [mean imputation, etc.]?
+    zero mean, unit standard deviation?
+    """
+    # remove observations before 1963 (ca. 393739 observations)
+    processed_data = data[data["date"].dt.year >= 1963]
+
+    # remove observations where return is null (ca. 1271699 observations)
+    processed_data = processed_data[processed_data["ret"].notnull()]
+
+    # TODO filter for minimum observations per firm?
+
+    ### standardization
+    
+    # standardize signals cross-sectionally at each date to achieve zero mean and unit std
+    # TODO check why processed_data["AM"].max() is not exactly 0.5 but slightly lower
+    for col in signal_names:
+        processed_data[col] = processed_data.groupby("date")[col].transform(
+            lambda x: (x.rank(method="average") - 1) / (len(x) - 1) - 0.5
+        )
+
+    # replace NAs with 0
+    processed_data[signal_names] = processed_data[signal_names].fillna(0)
+    return(data)
 
 if __name__ == '__main__':
 
@@ -122,19 +140,34 @@ if __name__ == '__main__':
         download_data(dataset_input) # load your data here
 
     # read data
+    # try:
+    #     with open('input_data.pkl', 'rb') as inp:
+    #         Z = pickle.load(inp)
+    #         R = pickle.load(inp)
+    # except:
+    #     print("Couldn't find suitable data.")
+
     try:
-        with open('input_data.pkl', 'rb') as inp:
-            Z = pickle.load(inp)
-            R = pickle.load(inp)
+        with open('data.pkl', 'rb') as inp:
+            data = pickle.load(inp)
     except:
         print("Couldn't find suitable data.")
 
-    preprocessing(Z,R)
-    """
+    signal_names = [col for col in data.columns if col not in ["permno", "date","signals_date","ret"]] # TODO find more dynamic solution
+    
+    data = preprocessing(data, signal_names)
+
+    characteristics = [col for col in data.columns if col not in ["ret"]]
+
+    Z = {t: df[characteristics] for t, df in data.groupby("date")}
+    R = {t: s["ret"] for t, s in data.groupby("date")}
+    
+    print(Z)
+    
     # IPCA: no anomaly
     ipca_0 = IPCA(Z, R=R, K=K)
     ipca_0.run_ipca(dispIters=True)
-
+    """
     # IPCA: with anomaly
     gFac = pd.DataFrame(1., index=sorted(R.keys()), columns=['anomaly']).T
     ipca_1 = IPCA(Z, R=R, K=K, gFac=gFac)
