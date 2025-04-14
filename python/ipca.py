@@ -36,8 +36,11 @@ class IPCA():
         # build characteristics-weighted portfolio needed for the optimization of dynamic betas
         Q, W, val_obs = _build_portfolio(X, y, indices, metad)
         self.Q, self.W, self.val_obs = Q, W, val_obs
-        self.metad = metad        
+        self.metad = metad
 
+        # run IPCA
+        Gamma, Factors = self._fit_ipca(X=X, y=y, indices=indices, Q=Q,
+                                        W=W, val_obs=val_obs)
 
 ########## helper functions ##########
 
@@ -112,6 +115,7 @@ def _build_portfolio(X, y, indices, metad):
 
     IPCA needs returns interacted with instruments (Q) to solve the optimization problem for dynamic betas.
 
+    --- RETURNS ---
     Q : matrix of dimensions (L, T), containing the characteristics-weighted portfolios
     W : matrix of dimensions (L, L, T)
     val_obs : matrix of dimension (T), containting the number of non missing observations at each point in time
@@ -142,7 +146,7 @@ def _build_portfolio(X, y, indices, metad):
             val_obs[t] = np.sum(ixt) # store number of observations
 
             """
-            Q: Each element Q_l_t represents a weighted average of returns at time t,
+            Q : Each element Q_l_t represents a weighted average of returns at time t,
             for a portfolio whose weights are determined by the value of the assets' characteristic l,
             normalized by the number of non-missing observations of time t.
             If the first two characteristics l are e.g. value and capital,
@@ -164,3 +168,15 @@ def _build_portfolio(X, y, indices, metad):
 
     # return portfolio data
     return Q, W, val_obs
+
+def _fit_ipca(self, X, y, indices, Q, W, val_obs):
+    """
+    Fits the regressor to the data using alternating least squares.
+
+    --- RETURNS ---
+    Gamma : array-like with dimensions (L, n_factors)
+    Factors : array_like with dimensions (n_factors, T)
+    """
+
+    ALS_inputs = (Q, W, val_obs)
+    ALS_fit = self._ALS_fit_portfolio
