@@ -119,7 +119,7 @@ def preprocessing(data, signal_names):
     ### standardization
     
     # standardize signals cross-sectionally at each date to achieve zero mean and unit std
-    # TODO check why processed_data["AM"].max() is not exactly 0.5 but slightly lower
+    # TODO check why processed_data["AM"].max() is not exactly 0.5 but slightly lower, alternative try scipy ranking
     for col in signal_names:
         processed_data[col] = processed_data.groupby("date")[col].transform(
             lambda x: (x.rank(method="average") - 1) / (len(x) - 1) - 0.5
@@ -127,11 +127,9 @@ def preprocessing(data, signal_names):
 
     # replace NAs with 0
     processed_data[signal_names] = processed_data[signal_names].fillna(0)
-    return(data)
+    return(processed_data)
 
 if __name__ == '__main__':
-
-    K = 1 # specify K
     
     download_input = input("Do you want to download new data (y)?\n")
 
@@ -157,16 +155,25 @@ if __name__ == '__main__':
     
     data = preprocessing(data, signal_names)
 
-    characteristics = [col for col in data.columns if col not in ["ret"]]
+    data.set_index(["permno", "date"], inplace=True) # TODO move to correct (earlier) position
 
-    Z = {t: df[characteristics] for t, df in data.groupby("date")}
-    R = {t: s["ret"] for t, s in data.groupby("date")}
-    
-    print(Z)
+    # construct Z and R as required by ipca (convert pd.Float64 to np.float32, drop date from index)
+    # TODO check whether np.float32 conversion makes sense earlier. conversion is necessary
+    # as otherwise characteristics happen to become pd.Float64 at some point
+    Z = {t: df[signal_names].astype(np.float32).droplevel("date") for t, df in data.groupby("date")}
+    R = {t: s["ret"].astype(np.float32).droplevel("date") for t, s in data.groupby("date")}
     
     # IPCA: no anomaly
+    K = 3 # specify K
+
     ipca_0 = IPCA(Z, R=R, K=K)
     ipca_0.run_ipca(dispIters=True)
+
+    print(ipca_0.r2)
+    print(ipca_0.Gamma)
+    print(ipca_0.Fac)
+    ipca_0.visualize_factors()
+
     """
     # IPCA: with anomaly
     gFac = pd.DataFrame(1., index=sorted(R.keys()), columns=['anomaly']).T
