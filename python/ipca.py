@@ -20,6 +20,7 @@ import openassetpricing as oap
 
 # visualization
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 class IPCA(object):
     def __init__(self, Z, R=None, X=None, K=0, gFac=None):
@@ -232,10 +233,22 @@ class IPCA(object):
         factors = self.Fac.T  # shape: T x K
 
         # plot time-series of latent factors
-        factors.plot(figsize=(10, 4), title='Estimated IPCA Latent Factors')
+        factors.plot(figsize=(10, 4), title='IPCA Latent Factors')
         plt.xlabel("Time")
         plt.ylabel("Factor Value")
         plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+    
+    def visualize_gamma(self):
+        gamma = self.Gamma
+
+        # plot heatmap of gamma loadings
+        plt.figure(figsize=(10, 12))
+        sns.heatmap(gamma, cmap="vlag", center=0, annot=False, fmt=".2f", cbar=True)
+        plt.title("IPCA Gamma Loadings")
+        plt.xlabel("Latent Factors")
+        plt.ylabel("Characteristics")
         plt.tight_layout()
         plt.show()
 
@@ -260,68 +273,3 @@ def _calc_r2(r_act, r_fit):
     sse = sum(sumsq(r_act[t] - r_fit[t]) for t in r_fit.keys())
     sst = sum(sumsq(r_act[t]) for t in r_fit.keys())
     return 1. - sse / sst
-
-def download_data(dataset="grunfeld"):
-    if(dataset == "grunfeld"):
-        data = grunfeld.load_pandas().data
-
-        ########## preprocessing ##########
-
-        # convert date
-        data.year = data.year.astype(np.int64)
-
-        # establish unique IDs
-        N = len(np.unique(data.firm))
-        ID = dict(zip(np.unique(data.firm).tolist(), np.arange(1, N+1)+5))
-        data.firm = data.firm.apply(lambda x: ID[x])
-
-        # rearrange ordering
-        data = data[['firm', 'year', 'invest', 'value', 'capital']]
-
-        # prepare pre-specified factors test vars
-        PSF1 = np.random.randn(len(np.unique(data.loc[:, 'year'])), 1)
-        PSF1 = PSF1.reshape((1, -1))
-        PSF2 = np.random.randn(len(np.unique(data.loc[:, 'year'])), 2)
-        PSF2 = PSF2.reshape((2, -1))
-
-        # set entity-time index and prepare independent variables (value, capital) and dependent variable (invest, analogous to return)
-        data = data.set_index(['firm', 'year'])
-        X = data.drop('invest', axis=1)
-        y = data['invest']
-        
-        # lag x by 1 period as required:
-        X_lagged = X.groupby('firm').shift(1).dropna()
-        y_aligned = y.loc[X_lagged.index]
-
-        # convert to time-indexed dict(T) as required:
-        # Z (dict(T) of df(NxL)): characteristics; can be rank-demeaned
-        # R (dict(T) of srs(N); not needed for managed-ptf-only version): asset returns
-        Z = {t: df.droplevel('year') for t, df in X.groupby('year')}
-        R = {t: s.droplevel('year') for t, s in y.groupby('year')}
-    elif(dataset == "openassetpricing"):
-
-        # https://github.com/mk0417/open-asset-pricing-download/blob/master/examples/ML_portfolio_example.ipynb
-        openap = oap.OpenAP(202408)
-
-        # requires WRDS authentication
-        wrds_conn = wrds.Connection()
-
-        crsp = wrds_conn.raw_sql(
-            """select a.permno, a.date, a.ret*100 as ret
-                                from crsp.msf a
-                                join crsp.msenames b 
-                                on a.permno = b.permno
-                                and a.date >= b.namedt
-                                and a.date <= b.nameendt
-                                where b.shrcd in (10, 11, 12) 
-                                and b.exchcd in (1, 2, 3)""",
-            date_cols=["date"],
-        )
-
-        firm_characteristics = openap.dl_all_signals('pandas') 
-        
-    elif(dataset == "crsp"):
-        raise NotImplementedError('Dataset not yet supported.')
-    else:
-        raise NotImplementedError('No valid dataset selected.')
-    return(Z, R)

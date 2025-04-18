@@ -94,12 +94,15 @@ def download_data(dataset="grunfeld"):
 
         # merge data by left join return on signals
         data = openap_signals.merge(crsp[["permno", "date", "ret"]], on=["permno", "date"], how="left")
-
     else:
         raise NotImplementedError('No valid dataset selected.')
     
-    with open('data.pkl', 'wb') as outp:
-        pickle.dump(data, outp, pickle.HIGHEST_PROTOCOL)
+    try:
+        with open('input.pkl', 'wb') as outp:
+            pickle.dump(data, outp, pickle.HIGHEST_PROTOCOL)
+        print("Input data saved to input.pkl")
+    except:
+        print("Couldn't save input data.")
 
     return(data)
 
@@ -129,6 +132,15 @@ def preprocessing(data, signal_names):
     processed_data[signal_names] = processed_data[signal_names].fillna(0)
     return(processed_data)
 
+def save_data(IPCAs):
+    try:
+        with open('output.pkl', 'wb') as outp:
+            pickle.dump(IPCAs, outp, pickle.HIGHEST_PROTOCOL)
+        print("Result data saved to output.pkl")
+    except:
+        print("Couldn't export result data.")
+    
+
 if __name__ == '__main__':
     
     download_input = input("Do you want to download new data (y)?\n")
@@ -137,19 +149,11 @@ if __name__ == '__main__':
         dataset_input = input("Select your desired dataset [grunfeld | openap]:\n")
         download_data(dataset_input) # load your data here
 
-    # read data
-    # try:
-    #     with open('input_data.pkl', 'rb') as inp:
-    #         Z = pickle.load(inp)
-    #         R = pickle.load(inp)
-    # except:
-    #     print("Couldn't find suitable data.")
-
     try:
-        with open('data.pkl', 'rb') as inp:
+        with open('input.pkl', 'rb') as inp:
             data = pickle.load(inp)
     except:
-        print("Couldn't find suitable data.")
+        print("Couldn't find suitable input data.")
 
     signal_names = [col for col in data.columns if col not in ["permno", "date","signals_date","ret"]] # TODO find more dynamic solution
     
@@ -164,17 +168,25 @@ if __name__ == '__main__':
     R = {t: s["ret"].astype(np.float32).droplevel("date") for t, s in data.groupby("date")}
     
     # IPCA: no anomaly
-    K = 3 # specify K
+    K = 5 # specify K
 
-    ipca_0 = IPCA(Z, R=R, K=K)
-    ipca_0.run_ipca(dispIters=True)
+    Ks = [1,3,5]
+    IPCAs = []
 
+    for K in Ks:
+        model = IPCA(Z, R=R, K=K)
+        model.run_ipca(dispIters=True)
+        IPCAs.append(model)
+
+    save_data(IPCAs)
+
+    """
+    #
     print(ipca_0.r2)
     print(ipca_0.Gamma)
     print(ipca_0.Fac)
     ipca_0.visualize_factors()
 
-    """
     # IPCA: with anomaly
     gFac = pd.DataFrame(1., index=sorted(R.keys()), columns=['anomaly']).T
     ipca_1 = IPCA(Z, R=R, K=K, gFac=gFac)
