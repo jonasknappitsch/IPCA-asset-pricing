@@ -98,11 +98,11 @@ def download_data(dataset="grunfeld"):
         raise NotImplementedError('No valid dataset selected.')
     
     try:
-        with open('input.pkl', 'wb') as outp:
+        with open('raw_data.pkl', 'wb') as outp:
             pickle.dump(data, outp, pickle.HIGHEST_PROTOCOL)
-        print("Input data saved to input.pkl")
+        print("Raw data saved to raw_data.pkl")
     except:
-        print("Couldn't save input data.")
+        print("Couldn't save raw data.")
 
     return(data)
 
@@ -130,13 +130,21 @@ def preprocessing(data, signal_names):
 
     # replace NAs with 0
     processed_data[signal_names] = processed_data[signal_names].fillna(0)
+    
+    try:
+        with open('processed_data.pkl', 'wb') as outp:
+            pickle.dump(processed_data, outp, pickle.HIGHEST_PROTOCOL)
+        print("Processed data saved to processed_data.pkl")
+    except:
+        print("Couldn't save processed data.")
+    
     return(processed_data)
 
 def save_data(IPCAs):
     try:
-        with open('output.pkl', 'wb') as outp:
+        with open('result_data.pkl', 'wb') as outp:
             pickle.dump(IPCAs, outp, pickle.HIGHEST_PROTOCOL)
-        print("Result data saved to output.pkl")
+        print("Result data saved to result_data.pkl")
     except:
         print("Couldn't export result data.")
     
@@ -170,7 +178,7 @@ if __name__ == '__main__':
     # IPCA: no anomaly
     K = 5 # specify K
 
-    Ks = [1,3,5]
+    Ks = [1,2,3]
     IPCAs = []
 
     for K in Ks:
@@ -186,6 +194,7 @@ if __name__ == '__main__':
     print(ipca_0.Gamma)
     print(ipca_0.Fac)
     ipca_0.visualize_factors()
+    ipca_0.visualize_gamma()
 
     # IPCA: with anomaly
     gFac = pd.DataFrame(1., index=sorted(R.keys()), columns=['anomaly']).T
