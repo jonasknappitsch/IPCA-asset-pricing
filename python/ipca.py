@@ -252,6 +252,49 @@ class IPCA(object):
         plt.tight_layout()
         plt.show()
 
+    def test_gamma_significance(self, B=1000):
+        '''
+        Tests the significance of individual characteristics' contribution while controlling
+        for all other characteristics. Generates bootstrap samples under the null-hypothesis
+        that characteristic l has no effect on loadings.
+        Caveat: Highly computationally intensive due to dimensionality of bootstrapping IPCAs (L x B)
+
+        [Inputs]
+        B number of bootstrap samples per chara
+        
+        [Outputs]
+        Wald-type significance statistic
+        p-value significance statistic
+        '''
+        assert self.has_latent and not self.has_prespec, "Test valid only in latent factor-only model."
+        
+        results = []
+        
+        for l, char_name in enumerate(self.charas):
+            # compute W_stat = gamma.T @ gamma
+            gamma_vec = self.fGamma.iloc[l, :].values
+            W_stat = gamma_vec @ gamma_vec
+            # zero out the l-th row
+            Gamma_tilde = self.fGamma.copy()
+            Gamma_tilde.iloc[l, :] = 0
+            # compute residuals under the unrestricted model
+            d_hat = {t: self.X[t] - self.Z[t].dot(self.fGamma).dot(self.fFac[t]) for t in self.times}
+            # bootstrap
+            W_tilde_b = []
+            for b in range(B):
+                print("Starting bootstrap ", b, "/", B, " for chara ", l, "/",len(self.charas))
+                d_b = {t: d_hat[t].sample(frac=1, replace=True) for t in self.times}
+                X_b = {t: self.Z[t].dot(Gamma_tilde).dot(self.fFac[t]) + d_b[t] for t in self.times}
+                # No need to convert X_b to DataFrame; pass as-is
+                ipca_b = IPCA(Z=self.Z, R=self.R, X=X_b, K=self.K)
+                ipca_b.run_ipca(fit=False)
+                gamma_vec_b = ipca_b.fGamma.iloc[l, :].values
+                W_tilde_b.append(gamma_vec_b @ gamma_vec_b)
+            # compute p-value
+            p_val = np.mean(np.array(W_tilde_b) > W_stat)
+            results.append((char_name, W_stat, p_val))
+        return pd.DataFrame(results, columns=["Characteristic", "W_stat", "p_value"]).set_index("Characteristic")
+
 ########## HELPER FUNCTIONS ##########
 
 # matrix left/right division (following MATLAB function naming)
