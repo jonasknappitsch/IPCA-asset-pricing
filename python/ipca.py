@@ -254,7 +254,7 @@ class IPCA(object):
 
     def test_anomaly_alpha(self, B=1000):
         '''
-        Test whether loosening the alpha restriction (unrestricted model)
+        Tests whether loosening the alpha restriction (unrestricted model)
         improves the model fit as compared to the restricted model (alpha = 0).
         Null hypothesis states that characteristics are unassociated with alphas.
         Caveat: Computationally intensive due to bootstrapping B IPCAs
@@ -274,7 +274,7 @@ class IPCA(object):
         # compute residuals for unrestricted model
         d_hat = {t: self.R[t] - self.Z[t].dot(self.Gamma).dot(self.Fac[t]) for t in self.times}
         W_tilde_b = []
-        
+
         for b in range(B):
             print("STARTING ", b, " out of ", B)
             # resample residuals
@@ -290,6 +290,13 @@ class IPCA(object):
         p_val = np.mean(np.array(W_tilde_b) > W_stat)
         return {"W_stat": W_stat, "p_value": p_val}
 
+    def test_observable_factors(self, B=1000):
+        '''
+        Tests explanatory power of observable factors beyond the baseline of IPCA factors
+        '''
+        
+        # TODO
+    
     def test_gamma_significance(self, B=1000):
         '''
         Tests the significance of individual characteristics' contribution while controlling
