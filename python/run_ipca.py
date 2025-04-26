@@ -111,10 +111,10 @@ def preprocessing(data, signal_names):
     how to deal with missing values [mean imputation, etc.]?
     zero mean, unit standard deviation?
     """
-    # remove observations before 1963 (ca. 393739 observations, cf Chen and McCoy 2024)
-    processed_data = data[data["date"].dt.year >= 1963]
+    # remove observations before 1963/1980/1985 (cf. Chen and McCoy 2024 # TODO)
+    processed_data = data[(data["date"].dt.year >= 1980) & (data["date"].dt.year <= 2023)]
 
-    # remove observations where return is null (ca. 1271699 observations)
+    # remove observations where return is null (# TODO check whether this is duplicate with ipca __init__ is_valid)
     processed_data = processed_data[processed_data["ret"].notnull()]
 
     # TODO filter for minimum observations per firm?
@@ -177,14 +177,12 @@ if __name__ == '__main__':
     R = {t: s["ret"].astype(np.float32).droplevel("date") for t, s in data.groupby("date")}
     
     # IPCA: no anomaly
-    K = 5 # specify K
-
-    Ks = [1,2,3]
+    Ks = [1,2,3,4,5]
     IPCAs = []
 
     for K in Ks:
         model = IPCA(Z, R=R, K=K)
-        model.run_ipca(dispIters=True)
+        model.run_ipca(dispIters=True,parallel=False)
         IPCAs.append(model)
 
     save_data(IPCAs)
