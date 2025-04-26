@@ -8,19 +8,15 @@ Liz Chen at AQR Capital Management (2019)
 Modified and extended by:
 Jonas Knappitsch at Vienna University of Economics and Business (2025)
 '''
+
+import time
 import pandas as pd
 import numpy as np
 import scipy.linalg as sla
 import scipy.sparse.linalg as ssla
-
-# datasets
-from statsmodels.datasets import grunfeld
-import wrds
-import openassetpricing as oap
-
-# visualization
-import matplotlib.pyplot as plt
-import seaborn as sns
+from joblib import Parallel, delayed # parallelization
+import matplotlib.pyplot as plt # visualization
+import seaborn as sns # visualization
 
 class IPCA(object):
     def __init__(self, Z, R=None, X=None, K=0, gFac=None):
@@ -91,15 +87,16 @@ class IPCA(object):
         self.Lambd, self.fLambd = None, None
         self.fitvals, self.r2 = {}, pd.Series()
 
-    def run_ipca(self, fit=True, dispIters=False, MinTol=1e-6, MaxIter=5000):
+    def run_ipca(self, fit=True, dispIters=False, parallel=True, MinTol=1e-6, MaxIter=5000):
         '''
         Computes Gamma, Fac and Lambd
 
         [Inputs]
         fit (bool): whether to compute fitted returns and r-squared after params are estimated
         dispIters (bool): whether to display results of each iteration
+        parallel (bool): whether to use parallelized estimation
         MinTol (float): tolerance for convergence
-        MaxIter (int): max number of iterations
+        MaxIter (int): max number of iterations        
 
         [Outputs]
         Gamma (df(Lx(K+M))): gamma estimate (fGamma for latent, gGamma for pre-specified)
@@ -123,8 +120,11 @@ class IPCA(object):
 
         # ALS estimate
         tol, iter = float('inf'), 0
+
+        start_time = time.time()
+
         while iter < MaxIter and tol > MinTol:
-            Gamma1, fFac1 = self._ipca_als_estimation(Gamma0)
+            Gamma1, fFac1 = self._ipca_als_estimation(Gamma0,parallel)
             tol_Gamma = abs(Gamma1 - Gamma0).values.max()
             tol_fFac = abs(fFac1 - fFac0).values.max() if self.has_latent else None
             tol = max(tol_Gamma, tol_fFac)
@@ -134,6 +134,10 @@ class IPCA(object):
 
             Gamma0, fFac0 = Gamma1, fFac1
             iter += 1
+
+        end_time = time.time()
+
+        print(f"ALS total time: {end_time - start_time:.2f} seconds")
 
         self.Gamma, self.fGamma, self.gGamma = Gamma1, Gamma1[self.fIdx], Gamma1[self.gIdx]
         if self.has_prespec:
@@ -146,12 +150,13 @@ class IPCA(object):
         if fit: # default to automatically compute fitted values
             self.fit()
 
-    def _ipca_als_estimation(self, Gamma0):
+    def _ipca_als_estimation(self, Gamma0, parallel):
         '''
         Runs one iteration of the alternating least squares estimation process
 
         [Inputs]
         Gamma0 (df(Lx(K+M))): previous iteration's Gamma estimate
+        parallel (bool): whether to use parallelized estimation
 
         [Outputs]
         Gamma1 (df(Lx(K+M))): current iteration's Gamma estimate
@@ -175,14 +180,37 @@ class IPCA(object):
         # 2. estimate gamma
         vec_len = self.L * (self.K + self.M)
         numer, denom = np.zeros(vec_len), np.zeros((vec_len, vec_len))
-        for t in self.times:
-            if self.has_prespec:
-                Fac = pd.concat([fFac1[t], self.gFac[t]])
-            else:
-                Fac = fFac1[t]
-            FacOutProd = np.outer(Fac, Fac)
-            numer += np.kron(self.X[t], Fac) * self.N_valid[t]
-            denom += np.kron(self.W[t], FacOutProd) * self.N_valid[t] # this line takes most of the time
+
+        if(parallel):
+            # Parallelized Estimation
+            # helper function for parallel execution of timestamps
+            def compute_time_contribution(t):
+                if self.has_prespec:
+                    Fac = pd.concat([fFac1[t], self.gFac[t]])
+                else:
+                    Fac = fFac1[t]
+                FacOutProd = np.outer(Fac, Fac)
+                numer_t = np.kron(self.X[t], Fac) * self.N_valid[t]
+                denom_t = np.kron(self.W[t], FacOutProd) * self.N_valid[t]
+                return numer_t, denom_t
+            # n_jobs=-1 ensures all CPU cores available are used
+            results = Parallel(n_jobs=-1, prefer="threads")(
+                delayed(compute_time_contribution)(t) for t in self.times
+            )
+            for numer_t, denom_t in results:
+                numer += numer_t
+                denom += denom_t
+        else:
+            # Non-Parallelized Estimation
+            for t in self.times:
+                if self.has_prespec:
+                    Fac = pd.concat([fFac1[t], self.gFac[t]])
+                else:
+                    Fac = fFac1[t]
+                FacOutProd = np.outer(Fac, Fac)
+                numer += np.kron(self.X[t], Fac) * self.N_valid[t]
+                denom += np.kron(self.W[t], FacOutProd) * self.N_valid[t] # this line takes most of the time
+        
         Gamma1_tmp = np.reshape(_mldivide(denom, numer), (self.L, self.K + self.M))
         Gamma1 = pd.DataFrame(Gamma1_tmp, index=self.charas, columns=self.fIdx + self.gIdx)
 
