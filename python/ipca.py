@@ -229,6 +229,8 @@ class IPCA(object):
         self.r2['X_Tot'] = _calc_r2(self.X, self.fitvals['X_DRP'])
         self.r2['X_Prd'] = _calc_r2(self.X, self.fitvals['X_CRP'])
 
+    ##### VISUALIZATIONS #####
+
     def visualize_factors(self):
         factors = self.Fac.T  # shape: T x K
 
@@ -252,6 +254,8 @@ class IPCA(object):
         plt.tight_layout()
         plt.show()
 
+    ##### HYPOTHESIS TESTS #####
+     
     def test_anomaly_alpha(self, B=1000):
         '''
         Tests whether loosening the alpha restriction (unrestricted model)
@@ -340,7 +344,7 @@ class IPCA(object):
             results.append((char_name, W_stat, p_val))
         return pd.DataFrame(results, columns=["Characteristic", "W_stat", "p_value"]).set_index("Characteristic")
 
-########## HELPER FUNCTIONS ##########
+##### HELPER FUNCTIONS #####
 
 # matrix left/right division (following MATLAB function naming)
 _mldivide = lambda denom, numer: sla.lstsq(np.array(denom), np.array(numer))[0]
