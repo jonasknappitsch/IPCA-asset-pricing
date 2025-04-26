@@ -252,6 +252,44 @@ class IPCA(object):
         plt.tight_layout()
         plt.show()
 
+    def test_anomaly_alpha(self, B=1000):
+        '''
+        Test whether loosening the alpha restriction (unrestricted model)
+        improves the model fit as compared to the restricted model (alpha = 0).
+        Null hypothesis states that characteristics are unassociated with alphas.
+        Caveat: Computationally intensive due to bootstrapping B IPCAs
+
+        [Inputs]
+        Requires IPCA instance initialized with anomaly gFac
+
+        [Outputs]
+        Wald-type significance statistic
+        p-value significance statistic
+        '''
+        assert self.has_latent and not self.has_prespec, "Test valid only in latent factor-only model."
+
+        # extract estimated Gamma_alpha
+        Gamma_alpha = self.gGamma.values
+        W_stat = np.sum(Gamma_alpha ** 2)
+        # compute residuals for unrestricted model
+        d_hat = {t: self.R[t] - self.Z[t].dot(self.Gamma).dot(self.Fac[t]) for t in self.times}
+        W_tilde_b = []
+        
+        for b in range(B):
+            print("STARTING ", b, " out of ", B)
+            # resample residuals
+            d_b = {t: pd.Series(np.random.choice(d_hat[t].values, size=len(d_hat[t]), replace=True),
+                        index=d_hat[t].index) for t in self.times}
+            # bootstrap pseudo returns under null (alpha=0)
+            pseudo_returns = {t: self.Z[t].dot(self.fGamma).dot(self.fFac[t]) + d_b[t] for t in self.times}
+            # re-estimate IPCA (restricted: gGamma forced to 0)
+            ipca_b = IPCA(Z=self.Z, R=pseudo_returns, K=self.K)
+            ipca_b.run_ipca(fit=False)
+            Gamma_alpha_b = ipca_b.gGamma.values
+            W_tilde_b.append(np.sum(Gamma_alpha_b ** 2))
+        p_val = np.mean(np.array(W_tilde_b) > W_stat)
+        return {"W_stat": W_stat, "p_value": p_val}
+
     def test_gamma_significance(self, B=1000):
         '''
         Tests the significance of individual characteristics' contribution while controlling
