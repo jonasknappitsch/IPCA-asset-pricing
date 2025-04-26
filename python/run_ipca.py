@@ -111,7 +111,7 @@ def preprocessing(data, signal_names):
     how to deal with missing values [mean imputation, etc.]?
     zero mean, unit standard deviation?
     """
-    # remove observations before 1963 (ca. 393739 observations)
+    # remove observations before 1963 (ca. 393739 observations, cf Chen and McCoy 2024)
     processed_data = data[data["date"].dt.year >= 1963]
 
     # remove observations where return is null (ca. 1271699 observations)
@@ -158,10 +158,10 @@ if __name__ == '__main__':
         download_data(dataset_input) # load your data here
 
     try:
-        with open('input.pkl', 'rb') as inp:
+        with open('raw_data.pkl', 'rb') as inp:
             data = pickle.load(inp)
     except:
-        print("Couldn't find suitable input data.")
+        print("Couldn't find suitable raw data.")
 
     signal_names = [col for col in data.columns if col not in ["permno", "date","signals_date","ret"]] # TODO find more dynamic solution
     
@@ -169,6 +169,7 @@ if __name__ == '__main__':
 
     data.set_index(["permno", "date"], inplace=True) # TODO move to correct (earlier) position
 
+    
     # construct Z and R as required by ipca (convert pd.Float64 to np.float32, drop date from index)
     # TODO check whether np.float32 conversion makes sense earlier. conversion is necessary
     # as otherwise characteristics happen to become pd.Float64 at some point
@@ -189,7 +190,6 @@ if __name__ == '__main__':
     save_data(IPCAs)
 
     """
-    #
     print(ipca_0.r2)
     print(ipca_0.Gamma)
     print(ipca_0.Fac)
@@ -207,11 +207,9 @@ if __name__ == '__main__':
     gFac = gFac.T
     ipca_2 = IPCA(Z, R=R, K=K, gFac=gFac)
     ipca_2.run_ipca(dispIters=True)
-
-    ########## compare results ##########
     """
     
-
+    ########## compare results ##########
     """
     tested: this code reaches same results on grunfield data
     as Kelly's python implementation "https://github.com/bkelly-lab/ipca.git"
