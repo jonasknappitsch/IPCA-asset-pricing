@@ -94,7 +94,7 @@ class IPCA(object):
         [Inputs]
         fit (bool): whether to compute fitted returns and r-squared after params are estimated
         dispIters (bool): whether to display results of each iteration
-        parallel (bool): whether to use parallelized estimation
+        parallel (bool): whether to use parallelized estimation (can reduce time per iteration)
         MinTol (float): tolerance for convergence
         MaxIter (int): max number of iterations        
 
@@ -156,7 +156,7 @@ class IPCA(object):
 
         [Inputs]
         Gamma0 (df(Lx(K+M))): previous iteration's Gamma estimate
-        parallel (bool): whether to use parallelized estimation
+        parallel (bool): whether to use parallelized estimation (can reduce time per iteration)
 
         [Outputs]
         Gamma1 (df(Lx(K+M))): current iteration's Gamma estimate
