@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import csv
 import pickle
 from ipca import IPCA
 
@@ -48,10 +49,14 @@ def download_data(dataset="grunfeld"):
         # R (dict(T) of srs(N); not needed for managed-ptf-only version): asset returns
         Z = {t: df.droplevel('year') for t, df in X.groupby('year')}
         R = {t: s.droplevel('year') for t, s in y.groupby('year')}
-
     elif(dataset == "openap"):
-        # https://github.com/mk0417/open-asset-pricing-download/blob/master/examples/ML_portfolio_example.ipynb
-        
+        '''
+        Source: Chen and Zimmermann (2021) "Open Source Cross-Sectional Asset Pricing"
+        https://github.com/mk0417/open-asset-pricing-download/
+
+        212 Predictors
+        '''
+
         # download WRDS CRSP return data
         wrds_conn = wrds.Connection()
         crsp = wrds_conn.raw_sql(
@@ -94,6 +99,22 @@ def download_data(dataset="grunfeld"):
 
         # merge data by left join return on signals
         data = openap_signals.merge(crsp[["permno", "date", "ret"]], on=["permno", "date"], how="left")
+    elif(dataset=="gukellyxiu"):
+        '''
+        Source: Gu, Kelly and Xiu (2020) "Empirical Asset Pricing via Machine Learning"
+        https://dachxiu.chicagobooth.edu
+        '''
+        
+        data = []
+        try:
+            with open('data/gukellyxiu/raw_data.csv', newline='') as inp:
+                reader = csv.reader(inp, delimiter=',')
+                for row in reader:
+                    data.append(row)
+        except:
+            print("Couldn't find suitable raw data.")
+        
+        
     else:
         raise NotImplementedError('No valid dataset selected.')
     
