@@ -141,7 +141,7 @@ def download_data(dataset="grunfeld"):
         data = signals.merge(crsp[['permno', 'date', 'ret']], on=['permno', 'date'], how='left')
         # set entity-time index
         data = data.set_index(['permno','date'])
-        
+
     else:
         raise NotImplementedError('No valid dataset selected.')
     
@@ -152,28 +152,33 @@ def download_data(dataset="grunfeld"):
     except:
         print("Couldn't save raw data.")
 
-    return(data)
+    return(data, signal_names)
 
 def preprocessing(data, signal_names):
     """
     how to deal with missing values [mean imputation, etc.]?
     zero mean, unit standard deviation?
     """
-    # remove observations before 1963/1980/1985 (cf. Chen and McCoy 2024 # TODO)
-    processed_data = data[(data["date"].dt.year >= 1980) & (data["date"].dt.year <= 2023)]
+    print("Preprocessing data...")
+    # filter by date (remove observations before 1963/1980, cf. Chen and McCoy 2024 # TODO)
+    start_year = 1980
+    end_year = 2023
+
+    processed_data = data[
+    (data.index.get_level_values('date').year >= start_year) &
+    (data.index.get_level_values('date').year <= end_year)
+]
 
     # remove observations where return is null (# TODO check whether this is duplicate with ipca __init__ is_valid)
-    processed_data = processed_data[processed_data["ret"].notnull()]
+    processed_data = processed_data[processed_data['ret'].notnull()]
 
     # TODO filter for minimum observations per firm?
-
-    ### standardization
     
     # standardize signals cross-sectionally at each date to achieve zero mean and unit std
     # TODO check why processed_data["AM"].max() is not exactly 0.5 but slightly lower, alternative try scipy ranking
     for col in signal_names:
-        processed_data[col] = processed_data.groupby("date")[col].transform(
-            lambda x: (x.rank(method="average") - 1) / (len(x) - 1) - 0.5
+        processed_data[col] = processed_data.groupby('date')[col].transform(
+            lambda x: (x.rank(method='average') - 1) / (len(x) - 1) - 0.5
         )
 
     # replace NAs with 0
@@ -201,22 +206,18 @@ if __name__ == '__main__':
     
     download_input = input("Do you want to download new data (y)?\n")
 
-    if(download_input == "y"):
-        dataset_input = input("Select your desired dataset [grunfeld | openap]:\n")
-        download_data(dataset_input) # load your data here
-
-    try:
-        with open('raw_data.pkl', 'rb') as inp:
-            data = pickle.load(inp)
-    except:
-        print("Couldn't find suitable raw data.")
-
-    signal_names = [col for col in data.columns if col not in ["permno", "date","signals_date","ret"]] # TODO find more dynamic solution
+    if(download_input.lower() == "y"):
+        dataset_input = input("Select your desired dataset [grunfeld | openap | gukellyxiu]:\n")
+        data, signal_names = download_data(dataset_input) # load your data here
+    else:
+        try:
+            with open('raw_data.pkl', 'rb') as inp:
+                data = pickle.load(inp)
+            signal_names = [col for col in data.columns if col not in ["permno", "date","signals_date","ret","sic2"]] # TODO find more dynamic solution
+        except:
+            print("Couldn't find suitable raw data.")    
     
     data = preprocessing(data, signal_names)
-
-    data.set_index(["permno", "date"], inplace=True) # TODO move to correct (earlier) position
-
     
     # construct Z and R as required by ipca (convert pd.Float64 to np.float32, drop date from index)
     # TODO check whether np.float32 conversion makes sense earlier. conversion is necessary
@@ -230,10 +231,10 @@ if __name__ == '__main__':
 
     for K in Ks:
         model = IPCA(Z, R=R, K=K)
-        model.run_ipca(dispIters=True,parallel=False)
+        model.run_ipca(dispIters=True)
         IPCAs.append(model)
 
-    save_data(IPCAs)
+    save_data(IPCAs)    
 
     """
     print(ipca_0.r2)

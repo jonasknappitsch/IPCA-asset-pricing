@@ -274,11 +274,15 @@ class IPCA(object):
         gamma = self.Gamma
 
         # plot heatmap of gamma loadings
-        plt.figure(figsize=(10, 12))
-        sns.heatmap(gamma, cmap="vlag", center=0, annot=False, fmt=".2f", cbar=True)
+        plt.figure(figsize=(12, 20))
+        ax = sns.heatmap(gamma, cmap="vlag", center=0, annot=True, fmt=".2f", cbar=True,linewidths=0.5)
         plt.title("IPCA Gamma Loadings")
         plt.xlabel("Latent Factors")
         plt.ylabel("Characteristics")
+
+        ax.set_yticklabels(ax.get_yticklabels(), rotation=0, fontsize=8)
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=0, ha='right', fontsize=10)
+
         plt.tight_layout()
         plt.show()
 
