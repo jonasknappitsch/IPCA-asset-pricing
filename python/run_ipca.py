@@ -16,8 +16,6 @@ def download_data(dataset="grunfeld"):
     if(dataset == "grunfeld"):
         data = grunfeld.load_pandas().data
 
-        ########## preprocessing ##########
-
         # convert date
         data.year = data.year.astype(np.int64)
 
@@ -26,29 +24,15 @@ def download_data(dataset="grunfeld"):
         ID = dict(zip(np.unique(data.firm).tolist(), np.arange(1, N+1)+5))
         data.firm = data.firm.apply(lambda x: ID[x])
 
-        # rearrange ordering
+        # rearrange and rename to proper format
         data = data[['firm', 'year', 'invest', 'value', 'capital']]
-
-        # prepare pre-specified factors test vars
-        PSF1 = np.random.randn(len(np.unique(data.loc[:, 'year'])), 1)
-        PSF1 = PSF1.reshape((1, -1))
-        PSF2 = np.random.randn(len(np.unique(data.loc[:, 'year'])), 2)
-        PSF2 = PSF2.reshape((2, -1))
-
-        # set entity-time index and prepare independent variables (value, capital) and dependent variable (invest, analogous to return)
-        data = data.set_index(['firm', 'year'])
-        X = data.drop('invest', axis=1)
-        y = data['invest']
+        data = data.rename(columns={'year': 'date'})
+        data = data.rename(columns={'invest': 'ret'}) # technically no return, but for consistency
         
-        # lag x by 1 period if required:
-        # X_lagged = X.groupby('firm').shift(1).dropna()
-        # y_aligned = y.loc[X_lagged.index]
+        # set entity-time index and signals
+        data = data.set_index(['firm', 'date'])
+        signal_names = ['value','capital']
 
-        # convert to time-indexed dict(T) as required:
-        # Z (dict(T) of df(NxL)): characteristics; can be rank-demeaned
-        # R (dict(T) of srs(N); not needed for managed-ptf-only version): asset returns
-        Z = {t: df.droplevel('year') for t, df in X.groupby('year')}
-        R = {t: s.droplevel('year') for t, s in y.groupby('year')}
     elif(dataset == "openap"):
         '''
         Source: Chen and Zimmermann (2021) "Open Source Cross-Sectional Asset Pricing"
@@ -56,6 +40,27 @@ def download_data(dataset="grunfeld"):
 
         212 Predictors
         '''
+
+        # download all Chen-Zimmermann predictors
+        openap = oap.OpenAP(202408)
+        signals = openap.dl_all_signals('pandas') # download all signals
+        # openap_signals = openap.dl_signal('pandas',['AM','Beta','BM','CF','Mom12m']) # download certain signals of openap.dl_signal_doc('pandas')
+
+        # lag to ensure return at t is predicted by signals at t+1 and assume signal is available for trading end of month (28th) to allow merge with returns
+        signals['date'] = pd.to_datetime(signals['yyyymm'].astype(str) + '28', format='%Y%m%d') + pd.DateOffset(months=1)
+        # keep original (non-lagged) signal date stored for clarity
+        signals = signals.rename(columns={'yyyymm': 'signals_date'})
+
+        # get signal names
+        signal_names = [col for col in signals.columns if col not in ['permno', 'date','signals_date']]
+
+        # convert int64/float64 to int32/float32 for performance and memory reasons
+        signals['permno'] = signals['permno'].astype('int32')
+        signals[signal_names] = signals[signal_names].astype('float32')
+
+        # arrange order
+        cols = ['permno','date','signals_date'] + signal_names
+        signals = signals[cols]
 
         # download WRDS CRSP return data
         wrds_conn = wrds.Connection()
@@ -71,49 +76,71 @@ def download_data(dataset="grunfeld"):
             date_cols=["date"],
         )
 
-        # download all Chen-Zimmermann predictors
-        openap = oap.OpenAP(202408)
-        openap_signals = openap.dl_all_signals('pandas') # download all signals
-        
-        # openap_signals = openap.dl_signal('pandas',['AM','Beta','BM','CF','Mom12m']) # download certain signals of openap.dl_signal_doc('pandas')
+        # change crsp date day to 28th to allow join with signals
+        crsp['date'] = crsp['date'].apply(lambda d: d.replace(day=28))
 
-        # get signal names
-        signal_names = [col for col in openap_signals.columns if col not in ["permno", "yyyymm"]]
-
-        # convert signals from float64 to float32 for performance and memory reasons
-        openap_signals[signal_names] = openap_signals[signal_names].astype('float32')
-
-        # lag to ensure return at t is predicted by signals at t+1, assume signal is available for trading end of month (28th)
-        openap_signals["date"] = pd.to_datetime(openap_signals["yyyymm"].astype(str) + "28", format="%Y%m%d") + pd.DateOffset(months=1)
-
-        # keep original signal date stored for clarity and arrange order
-        openap_signals = openap_signals.rename(columns={"yyyymm": "signals_date"})
-        cols = ["permno","date","signals_date"] + signal_names
-        openap_signals = openap_signals[cols]
-
-        # change crsp date day to 28th to allow join
-        crsp["date"] = crsp["date"].apply(lambda d: d.replace(day=28))
-
-        # change crsp permno dtype to int32 for memory alignment
-        crsp["permno"] = crsp["permno"].astype("int32")
+        # change crsp permno dtype to int32 for memory alignment # TODO harmonize memory conversions
+        crsp['permno'] = crsp['permno'].astype('int32')
 
         # merge data by left join return on signals
-        data = openap_signals.merge(crsp[["permno", "date", "ret"]], on=["permno", "date"], how="left")
+        data = signals.merge(crsp[['permno', 'date', 'ret']], on=['permno', 'date'], how='left')
+        # set entity-time index
+        data = data.set_index(['permno','date'])
+
     elif(dataset=="gukellyxiu"):
         '''
         Source: Gu, Kelly and Xiu (2020) "Empirical Asset Pricing via Machine Learning"
         https://dachxiu.chicagobooth.edu
         '''
         
-        data = []
         try:
-            with open('data/gukellyxiu/raw_data.csv', newline='') as inp:
-                reader = csv.reader(inp, delimiter=',')
-                for row in reader:
-                    data.append(row)
-        except:
-            print("Couldn't find suitable raw data.")
-        
+            signals = pd.read_csv('data/gukellyxiu/raw_data.csv', delimiter=',')
+            print("Data loaded successfully.")
+        except FileNotFoundError:
+            print("Couldn't find suitable data.")
+
+        # lag to ensure return at t is predicted by signals at t+1 and assume signal is available for trading end of month (28th) to allow merge with returns
+        signals['date'] = pd.to_datetime(signals['DATE'].astype(str), format='%Y%m%d') + pd.DateOffset(months=1)
+        signals['date'] = signals['date'].apply(lambda d: d.replace(day=28))
+
+        # keep original (non-lagged) signal date stored for clarity
+        signals = signals.rename(columns={'DATE': 'signals_date'})
+
+        # get signal names
+        signal_names = [col for col in signals.columns if col not in ['permno', 'date','signals_date','sic2']]
+
+        # convert int64/float64 to int32/float32 for performance and memory reasons
+        signals['permno'] = signals['permno'].astype('int32')
+        signals[signal_names] = signals[signal_names].astype('float32')
+
+        # arrange order
+        cols = ['permno','date','signals_date','sic2'] + signal_names
+        signals = signals[cols]
+
+        # download WRDS CRSP return data
+        wrds_conn = wrds.Connection()
+        crsp = wrds_conn.raw_sql(
+            """select a.permno, a.date, a.ret*100 as ret
+                                from crsp.msf a
+                                join crsp.msenames b 
+                                on a.permno = b.permno
+                                and a.date >= b.namedt
+                                and a.date <= b.nameendt
+                                where b.shrcd in (10, 11, 12) 
+                                and b.exchcd in (1, 2, 3)""",
+            date_cols=["date"],
+        )
+
+        # change crsp date day to 28th to allow join with signals
+        crsp['date'] = crsp['date'].apply(lambda d: d.replace(day=28))
+
+        # change crsp permno dtype to int32 for memory alignment # TODO harmonize memory conversions
+        crsp['permno'] = crsp['permno'].astype('int32')
+
+        # merge data by left join return on signals
+        data = signals.merge(crsp[['permno', 'date', 'ret']], on=['permno', 'date'], how='left')
+        # set entity-time index
+        data = data.set_index(['permno','date'])
         
     else:
         raise NotImplementedError('No valid dataset selected.')
