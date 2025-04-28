@@ -1,3 +1,9 @@
-ipca==0.6.7
-numpy==2.2.4
+joblib==1.4.2
+matplotlib==3.10.1
+numpy==2.2.5
+openassetpricing==0.0.1
+pandas==2.2.3
+scipy==1.15.2
+seaborn==0.13.2
 statsmodels==0.14.4
+wrds==3.3.0

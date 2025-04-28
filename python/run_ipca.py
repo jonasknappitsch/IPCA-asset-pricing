@@ -1,19 +1,13 @@
 import numpy as np
 import pandas as pd
-import csv
 import pickle
 from ipca import IPCA
+import wrds # datasets
+import matplotlib.pyplot as plt # visualization
 
-# datasets
-from statsmodels.datasets import grunfeld
-import wrds
-import openassetpricing as oap
-
-# visualization
-import matplotlib.pyplot as plt
-
-def download_data(dataset="grunfeld"):
+def download_data(dataset="gukellyxiu"):
     if(dataset == "grunfeld"):
+        from statsmodels.datasets import grunfeld
         data = grunfeld.load_pandas().data
 
         # convert date
@@ -42,6 +36,7 @@ def download_data(dataset="grunfeld"):
         '''
 
         # download all Chen-Zimmermann predictors
+        import openassetpricing as oap
         openap = oap.OpenAP(202408)
         signals = openap.dl_all_signals('pandas') # download all signals
         # openap_signals = openap.dl_signal('pandas',['AM','Beta','BM','CF','Mom12m']) # download certain signals of openap.dl_signal_doc('pandas')
@@ -161,8 +156,8 @@ def preprocessing(data, signal_names):
     """
     print("Preprocessing data...")
     # filter by date (remove observations before 1963/1980, cf. Chen and McCoy 2024 # TODO)
-    start_year = 1980
-    end_year = 2023
+    start_year = 1957
+    end_year = 2016
 
     processed_data = data[
     (data.index.get_level_values('date').year >= start_year) &
