@@ -6,7 +6,7 @@ IPCA application to asset pricing based on Kelly, Pruitt and Su (2018 and 2020).
 - Open Asset Pricing by Chen and Zimmermann (2020)
 - Grunfeld (1950)
 
-## How to use
+## Installation & Usage
 1. Install **requirements** from requirements.txt
     ``` 
     pip install -r /path/to/requirements.txt
@@ -31,3 +31,16 @@ IPCA application to asset pricing based on Kelly, Pruitt and Su (2018 and 2020).
     with open('result_data.pkl', 'rb') as inp:
         IPCAs = pickle.load(inp)
     ```
+
+(c) Jonas Knappitsch at Vienna University of Economics and Business (2025)
+
+## Sample Results
+``` python
+IPCAs[4].visualize_factors()
+```
+![Factors](python/img/IPCA_K5_Factors.png "IPCA Latent Factors")
+
+``` python
+IPCAs[4].visualize_gamma()
+```
+![Gammas](python/img/IPCA_K5_Gammas.png "IPCA Gamma Loadings")
