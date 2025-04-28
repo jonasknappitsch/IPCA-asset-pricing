@@ -1,9 +1,11 @@
 '''
 IPCA algorithm and applications:
-Kelly, Bryan T. and Pruitt, Seth and Su, Yinan, Characteristics Are Covariances: A Unified Model of Risk and Return. JFE Forthcoming. (2018)
+Kelly, Bryan T. and Pruitt, Seth and Su, Yinan, Characteristics Are Covariances:
+A Unified Model of Risk and Return. JFE. (2018)
 
-Original Python implementation:
+Base python implementation:
 Liz Chen at AQR Capital Management (2019)
+https://www.dropbox.com/scl/fi/ecm4mlm1d27ka71gwrgsq/ipca_public.py?rlkey=40icghiic36vgns0n552zpzdh&e=2&dl=0
 
 Modified and extended by:
 Jonas Knappitsch at Vienna University of Economics and Business (2025)
@@ -12,8 +14,8 @@ Jonas Knappitsch at Vienna University of Economics and Business (2025)
 import time
 import pandas as pd
 import numpy as np
-import scipy.linalg as sla
-import scipy.sparse.linalg as ssla
+import scipy.linalg as sla # optimization
+import scipy.sparse.linalg as ssla # optimization
 from joblib import Parallel, delayed # parallelization
 import matplotlib.pyplot as plt # visualization
 import seaborn as sns # visualization
