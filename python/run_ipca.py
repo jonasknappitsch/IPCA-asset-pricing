@@ -39,26 +39,39 @@ def download_data(dataset="gukellyxiu"):
 
         # download WRDS CRSP return data
         wrds_conn = wrds.Connection()
-        crsp = wrds_conn.raw_sql(
-            """select a.permno, a.date, a.ret*100 as ret
-                                from crsp.msf a
-                                join crsp.msenames b 
-                                on a.permno = b.permno
-                                and a.date >= b.namedt
-                                and a.date <= b.nameendt
-                                where b.shrcd in (10, 11, 12) 
-                                and b.exchcd in (1, 2, 3)""",
-            date_cols=["date"],
-        )
+        crsp = wrds_conn.raw_sql("""
+                        SELECT a.permno, a.date, a.ret*100 as ret
+                        FROM crsp.msf AS a
+                        JOIN crsp.msenames AS c 
+                            ON a.permno = c.permno
+                            AND a.date >= c.namedt
+                            AND a.date <= c.nameendt
+                        WHERE c.shrcd in (10, 11, 12) 
+                            AND c.exchcd in (1, 2, 3)
+            """, date_cols=["date"])
 
-        # change crsp date day to 28th to allow join with signals
+        # change crsp date day to 28th to allow join
         crsp['date'] = crsp['date'].apply(lambda d: d.replace(day=28))
 
         # change crsp permno dtype to int32 for memory alignment # TODO harmonize memory conversions
         crsp['permno'] = crsp['permno'].astype('int32')
 
+        # download Fama-French risk-free rate for excess returns
+        rf = wrds_conn.raw_sql("""
+                        SELECT date, rf
+                        FROM ff.factors_monthly
+                        """, date_cols=["date"])
+
+        # change ff date from 1st of month to 28th of previous month to allow join
+        rf['date'] = rf['date'] - pd.DateOffset(days=1)
+        rf['date'] = rf['date'].apply(lambda d: d.replace(day=28))
+
+        # merge crsp returns with rf and compute excess returns
+        crsp = crsp.merge(rf, on='date', how='left')
+        crsp['excess_ret'] = crsp['ret'] - crsp['rf']
+
         # merge data by left join return on signals
-        data = signals.merge(crsp[['permno', 'date', 'ret']], on=['permno', 'date'], how='left')
+        data = signals.merge(crsp[['permno', 'date', 'ret', 'rf','excess_ret']], on=['permno', 'date'], how='left')
         # set entity-time index
         data = data.set_index(['permno','date'])
 
@@ -93,7 +106,7 @@ def preprocessing(data, signal_names):
 ]
 
     # remove observations where return is null (# TODO check whether this is duplicate with ipca __init__ is_valid)
-    processed_data = processed_data[processed_data['ret'].notnull()]
+    processed_data = processed_data[processed_data['excess_ret'].notnull()]
 
     # TODO filter for minimum observations per firm?
     
@@ -136,7 +149,7 @@ if __name__ == '__main__':
             with open('data/raw_data.pkl', 'rb') as inp:
                 data = pickle.load(inp)
             print("Using previous raw data from data/raw_data.pkl.")
-            signal_names = [col for col in data.columns if col not in ["permno", "date","signals_date","ret","sic2"]] # TODO find more dynamic solution
+            signal_names = [col for col in data.columns if col not in ["permno", "date","signals_date","ret","rf","excess_ret","sic2"]] # TODO find more dynamic solution
         except:
             print("Couldn't find suitable raw data.")    
     
@@ -146,7 +159,7 @@ if __name__ == '__main__':
     # TODO check whether np.float32 conversion makes sense earlier. conversion is necessary
     # as otherwise characteristics happen to become pd.Float64 at some point
     Z = {t: df[signal_names].astype(np.float32).droplevel("date") for t, df in data.groupby("date")}
-    R = {t: s["ret"].astype(np.float32).droplevel("date") for t, s in data.groupby("date")}
+    R = {t: s["excess_ret"].astype(np.float32).droplevel("date") for t, s in data.groupby("date")}
     
     # IPCA: no anomaly
     Ks = [1,2,3,4,5]
@@ -180,21 +193,3 @@ if __name__ == '__main__':
     ipca_2.run_ipca(dispIters=True)
     """
     
-    ########## compare results ##########
-    """
-    tested: this code reaches same results on grunfield data
-    as Kelly's python implementation "https://github.com/bkelly-lab/ipca.git"
-    for
-    - Gamma
-    - Factors
-    but different results for
-    - R2 (asset, portfolio)
-    """
-
-    """
-    print(ipca_0.r2)
-    print(ipca_0.Gamma)
-    # print(ipca_2.Gamma)
-    print(ipca_0.Fac)
-    # ipca_2.visualize_factors()
-    """
