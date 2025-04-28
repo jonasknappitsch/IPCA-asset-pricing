@@ -312,7 +312,7 @@ class IPCA(object):
         W_tilde_b = []
 
         for b in range(B):
-            print("STARTING ", b, " out of ", B)
+            print("STARTING ", b+1, " out of ", B)
             # resample residuals
             d_b = {t: pd.Series(np.random.choice(d_hat[t].values, size=len(d_hat[t]), replace=True),
                         index=d_hat[t].index) for t in self.times}
@@ -363,7 +363,7 @@ class IPCA(object):
             # bootstrap
             W_tilde_b = []
             for b in range(B):
-                print("Starting bootstrap ", b, "/", B, " for chara ", l, "/",len(self.charas))
+                print("Starting bootstrap ", b+1, "/", B, " for chara ", l+1, "/",len(self.charas))
                 d_b = {t: d_hat[t].sample(frac=1, replace=True) for t in self.times}
                 X_b = {t: self.Z[t].dot(Gamma_tilde).dot(self.fFac[t]) + d_b[t] for t in self.times}
                 # No need to convert X_b to DataFrame; pass as-is
