@@ -8,7 +8,7 @@ IPCA application to asset pricing based on Kelly, Pruitt and Su (2018 and 2020).
     - Download data as provided by Xiu:
     https://dachxiu.chicagobooth.edu/download/datashare.zip
     - Extract and provide data under:
-    `python/data/raw_data/gukellyxiu.csv`
+    `python/data/gukellyxiu.csv`
 2. **Install requirements** from requirements.txt
     ``` 
     pip install -r /path/to/requirements.txt
