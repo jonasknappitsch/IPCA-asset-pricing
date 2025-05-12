@@ -262,6 +262,9 @@ class IPCA(object):
     ##### VISUALIZATIONS #####
 
     def visualize_factors(self):
+        '''
+        Plots time-series of all latent factors
+        '''
         factors = self.Fac.T  # shape: T x K
 
         # plot time-series of latent factors
@@ -272,7 +275,10 @@ class IPCA(object):
         plt.tight_layout()
         plt.show()
     
-    def visualize_gamma(self):
+    def visualize_gamma_heatmap(self):
+        '''
+        Plots heatmap of Gamma loadings of all latent factors
+        '''
         gamma = self.Gamma
 
         # plot heatmap of gamma loadings
@@ -287,6 +293,27 @@ class IPCA(object):
 
         plt.tight_layout()
         plt.show()
+
+    def visualize_gamma_barplot(self, sorted=False):
+        '''
+        Plots barplot of Gamma loadings for each latent factor
+        
+        [Inputs]
+        sorted (bool): whether to sort by loading values or not
+        '''
+        gamma = self.fGamma  # latent gamma only
+        for i, factor_id in enumerate(gamma.columns):
+            loadings = gamma[factor_id].sort_values() if sorted else gamma[factor_id]
+            fig, ax = plt.subplots(figsize=(10, 4))
+            ax.bar(loadings.index, loadings.values, color='gray')
+            ax.set_title(f"Factor {i + 1}", fontsize=14)
+            ax.axhline(0, color='black', linewidth=0.8)
+            ax.set_xticks(range(len(loadings)))
+            ax.set_xticklabels(loadings.index, rotation=90)
+            ax.set_ylabel("Loading")
+            ax.set_ylim(min(-0.8, loadings.min()*1.1), max(0.8, loadings.max()*1.1))
+            plt.tight_layout()
+            plt.show()
 
     ##### HYPOTHESIS TESTS #####
      
