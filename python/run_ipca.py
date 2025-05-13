@@ -15,7 +15,7 @@ def download_data(dataset="gukellyxiu"):
         
         try:
             signals = pd.read_csv('data/gukellyxiu.csv', delimiter=',')
-            print("Data loaded successfully.")
+            print("Signal data loaded successfully.")
         except FileNotFoundError:
             print("Couldn't find suitable data. Please provide 'data/gukellyxiu.csv'")
 
@@ -129,6 +129,19 @@ def preprocessing(data, signal_names):
     
     return(processed_data)
 
+def outline_data(data):
+    # Total unique assets
+    unique_assets = data.index.get_level_values("permno").nunique()
+    print('Total unique assets: ', unique_assets)
+
+    # Average stocks per month 
+    avg_stocks_per_month = (data.reset_index()
+                            .groupby("date")["permno"]
+                            .nunique()
+                            .mean()
+                            )
+    print('Average stocks per month: ', round(avg_stocks_per_month))
+
 def save_data(IPCAs):
     try:
         with open('data/result_data.pkl', 'wb') as outp:
@@ -155,6 +168,7 @@ if __name__ == '__main__':
     
     data = preprocessing(data, signal_names)
     
+    outline_data(data, signal_names)
     # construct Z and R as required by ipca (convert pd.Float64 to np.float32, drop date from index)
     # TODO check whether np.float32 conversion makes sense earlier. conversion is necessary
     # as otherwise characteristics happen to become pd.Float64 at some point
