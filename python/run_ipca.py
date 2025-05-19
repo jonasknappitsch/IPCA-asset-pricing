@@ -105,35 +105,38 @@ def download_data(dataset="gukellyxiu"):
     return(data, signal_names)
 
 def preprocessing(data, signal_names):
-    """
-    how to deal with missing values [mean imputation, etc.]?
-    zero mean, unit standard deviation?
-    """
     print("Preprocessing data...")
-    # filter by date (remove observations before 1963/1980, cf. Chen and McCoy 2024 # TODO)
+
+    # 1. filter by date pursuant to Gu Kelly Xiu 2020 (TODO consider removing observations before 1963/1980, cf. Chen and McCoy 2024)
     start_year = 1957
-    end_year = 2016
+    end_year = 2016 # TODO maybe extend to 2021?
 
     processed_data = data[
     (data.index.get_level_values('date').year >= start_year) &
-    (data.index.get_level_values('date').year <= end_year)
-]
+    (data.index.get_level_values('date').year <= end_year)]
 
-    # remove observations where return is null (# TODO check whether this is duplicate with ipca __init__ is_valid)
+    # 2. remove rows where return is null # TODO check if this is desired, or eg linear interpolation
     processed_data = processed_data[processed_data['excess_ret'].notnull()]
-
-    # TODO filter for minimum observations per firm?
     
-    # standardize signals cross-sectionally at each date to achieve zero mean and unit std
-    # TODO check why processed_data["AM"].max() is not exactly 0.5 but slightly lower, alternative try scipy ranking
+    # 3. remove rows where all signals are missing (e.g. due to lagging)
+    processed_data = processed_data.dropna(subset=signal_names, how='all')
+
+    # 4. standardize by performing rank-normalization among non-missing observations
     for col in signal_names:
-        processed_data[col] = processed_data.groupby('date')[col].transform(
-            lambda x: (x.rank(method='average') - 1) / (len(x) - 1) - 0.5
+        # rank characteristics cross-sectionally by date while ignoring NAs
+        ranks = processed_data[col].groupby(level='date').transform(
+            lambda x: x.rank(method='average', na_option='keep')
         )
+        # get # of non-missing observations per date
+        counts = processed_data[col].groupby(level='date').transform(
+            lambda x: x.notnull().sum()
+        )
+        # map into [-0.5, 0.5] interval among non-missing observations
+        processed_data[col] = (ranks / counts) - 0.5
 
-    # replace NAs with 0
+    # 5. impute missing values with median, which equals 0 after standardization
     processed_data[signal_names] = processed_data[signal_names].fillna(0)
-    
+
     try:
         with open('data/processed_data.pkl', 'wb') as outp:
             pickle.dump(processed_data, outp, pickle.HIGHEST_PROTOCOL)
