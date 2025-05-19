@@ -19,23 +19,36 @@ def download_data(dataset="gukellyxiu"):
         except FileNotFoundError:
             print("Couldn't find suitable data. Please provide 'data/gukellyxiu.csv'")
 
-        # lag to ensure return at t is predicted by signals at t+1 and assume signal is available for trading end of month (28th) to allow merge with returns
-        signals['date'] = pd.to_datetime(signals['DATE'].astype(str), format='%Y%m%d') + pd.DateOffset(months=1)
-        signals['date'] = signals['date'].apply(lambda d: d.replace(day=28))
+        # set entity-time multi-index (permno, date)
+        signals = signals.rename(columns={'DATE': 'date'})
+        signals["date"] = pd.to_datetime(signals["date"].astype(str), format="%Y%m%d")
+        signals = signals.set_index(['permno', 'date'])
 
-        # keep original (non-lagged) signal date stored for clarity
-        signals = signals.rename(columns={'DATE': 'signals_date'})
+        # construct signal_names but exclude any non-signal columns
+        non_signal_cols = ['sic2']
+        signal_names = [col for col in signals.columns if col not in non_signal_cols]
 
-        # get signal names
-        signal_names = [col for col in signals.columns if col not in ['permno', 'date','signals_date','sic2']]
+        # lag signals to ensure return at t is predicted by previous signals
+        use_frequency_lag = False # whether to lag according to signal frequency t=[1,4,6] as per Gu Kelly Xiu (2020), or uniformly by t=1
+        
+        if use_frequency_lag:
+            # advanced lag based on signal frequency
+            characteristics_table = pd.read_csv('data/characteristics_table.csv', delimiter=',')
+            lag_frequency = {'Monthly': 1, 'Quarterly': 4, 'Annual': 6}
+            lag_map = characteristics_table.set_index('Acronym')['Frequency'].map(lag_frequency).to_dict() # lag map as per Gu Kelly Xiu (2020)
+            
+            lagged_signals = pd.DataFrame(index=signals.index)
+            for col in signal_names:
+                lag = lag_map.get(col, 1)
+                lagged_signals[col] = signals[col].groupby(level="permno").shift(lag)
+        else:
+            # simple uniform lag (e.g. 1 month)
+            lagged_signals = signals[signal_names].groupby(level="permno").shift(1)
 
-        # convert int64/float64 to int32/float32 for performance and memory reasons
-        signals['permno'] = signals['permno'].astype('int32')
-        signals[signal_names] = signals[signal_names].astype('float32')
-
-        # arrange order
-        cols = ['permno','date','signals_date','sic2'] + signal_names
-        signals = signals[cols]
+        # set date from end of month to 28th to allow join with returns
+        lagged_signals = lagged_signals.reset_index()
+        lagged_signals['date'] = lagged_signals['date'].apply(lambda d: d.replace(day=28))
+        lagged_signals = lagged_signals.set_index(['permno', 'date'])
 
         # download WRDS CRSP return data
         wrds_conn = wrds.Connection()
@@ -71,8 +84,9 @@ def download_data(dataset="gukellyxiu"):
         crsp['excess_ret'] = crsp['ret'] - crsp['rf']
 
         # merge data by left join return on signals
-        data = signals.merge(crsp[['permno', 'date', 'ret', 'rf','excess_ret']], on=['permno', 'date'], how='left')
-        # set entity-time index
+        data = lagged_signals.merge(crsp[['permno', 'date', 'ret', 'rf','excess_ret']], on=['permno', 'date'], how='left')
+        
+        # set entity-time multi-index
         data = data.set_index(['permno','date'])
 
     elif(dataset=="other"):
@@ -168,7 +182,8 @@ if __name__ == '__main__':
     
     data = preprocessing(data, signal_names)
     
-    outline_data(data, signal_names)
+    outline_data(data)
+
     # construct Z and R as required by ipca (convert pd.Float64 to np.float32, drop date from index)
     # TODO check whether np.float32 conversion makes sense earlier. conversion is necessary
     # as otherwise characteristics happen to become pd.Float64 at some point
@@ -190,8 +205,7 @@ if __name__ == '__main__':
     print(IPCAs[0].Gamma)
     print(IPCAs[0].Fac)
     IPCAs[0].visualize_factors()
-    IPCAs[0].visualize_gamma()
-
+    IPCAs[0].visualize_gamma_heatmap()
 
     """
     # IPCA: with anomaly
