@@ -29,12 +29,12 @@ def download_data(dataset="gukellyxiu"):
         signal_names = [col for col in signals.columns if col not in non_signal_cols]
 
         # lag signals to ensure return at t is predicted by previous signals
-        use_frequency_lag = False # whether to lag according to signal frequency t=[1,4,6] as per Gu Kelly Xiu (2020), or uniformly by t=1
+        use_frequency_lag = True # whether to lag according to signal frequency t=[1,4,6] as per Gu Kelly Xiu (2020), or uniformly by t=1
         
         if use_frequency_lag:
             # advanced lag based on signal frequency
             characteristics_table = pd.read_csv('data/characteristics_table.csv', delimiter=',')
-            lag_frequency = {'Monthly': 1, 'Quarterly': 4, 'Annual': 6}
+            lag_frequency = {'Monthly': 1, 'Quarterly': 4, 'Annual': 6} # TODO check 1,4,6 (pref) or 1,5,7
             lag_map = characteristics_table.set_index('Acronym')['Frequency'].map(lag_frequency).to_dict() # lag map as per Gu Kelly Xiu (2020)
             
             lagged_signals = pd.DataFrame(index=signals.index)
@@ -108,8 +108,8 @@ def preprocessing(data, signal_names):
     print("Preprocessing data...")
 
     # 1. filter by date pursuant to Gu Kelly Xiu 2020 (TODO consider removing observations before 1963/1980, cf. Chen and McCoy 2024)
-    start_year = 1957
-    end_year = 2016 # TODO maybe extend to 2021?
+    start_year = 1957 # default: 1957
+    end_year = 2016 # default: 2016, TODO could be extended until 2021
 
     processed_data = data[
     (data.index.get_level_values('date').year >= start_year) &
@@ -120,7 +120,7 @@ def preprocessing(data, signal_names):
     
     # 3. remove rows where all signals are missing (e.g. due to lagging)
     processed_data = processed_data.dropna(subset=signal_names, how='all')
-
+    
     # 4. standardize by performing rank-normalization among non-missing observations
     for col in signal_names:
         # rank characteristics cross-sectionally by date while ignoring NAs
@@ -194,7 +194,7 @@ if __name__ == '__main__':
     R = {t: s["excess_ret"].astype(np.float32).droplevel("date") for t, s in data.groupby("date")}
     
     # IPCA: no anomaly
-    Ks = [1,2,3,4,5]
+    Ks = [5]
     IPCAs = []
 
     for K in Ks:
