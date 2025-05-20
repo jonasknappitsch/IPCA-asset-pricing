@@ -4,6 +4,7 @@ import pickle
 from ipca import IPCA
 import wrds # datasets
 import matplotlib.pyplot as plt # visualization
+from tabulate import tabulate # print formatted 
 
 def download_data(dataset="gukellyxiu"):
     if(dataset=="gukellyxiu"):
@@ -146,27 +147,55 @@ def preprocessing(data, signal_names):
     
     return(processed_data)
 
-def outline_data(data):
-    # Total unique assets
-    unique_assets = data.index.get_level_values("permno").nunique()
-    print('Total unique assets: ', unique_assets)
+def outline_data(data, signal_names):
+    summary = {}
 
-    # Average stocks per month 
-    avg_stocks_per_month = (data.reset_index()
-                            .groupby("date")["permno"]
-                            .nunique()
-                            .mean()
-                            )
-    print('Average stocks per month: ', round(avg_stocks_per_month))
+    total_observations = len(data)
+    total_assets = data.index.get_level_values("permno").nunique() # total unique assets
+    total_months = data.index.get_level_values('date').nunique() # total months covered
+    avg_assets_per_month = total_observations/total_months # average assets per month
+    start_date = data.index.get_level_values('date').min().strftime('%Y-%m')
+    end_date = data.index.get_level_values('date').max().strftime('%Y-%m')
 
-def save_data(IPCAs):
+    summary['Number of assets'] = total_assets
+    summary['Number of months'] = total_months
+    summary['Total observations'] = total_observations
+    summary['Average assets per month'] = avg_assets_per_month
+    summary['Start date'] = start_date
+    summary['End date'] = end_date
+
+    outline = pd.DataFrame.from_dict(summary, orient='index', columns=['Value'])
+
+    print("\n=== Data Outline ===")
+    print(tabulate(outline, headers=['Metric', 'Value'], tablefmt='github', floatfmt='.2f'))
+
+def save_data(IPCAs, name):
     try:
-        with open('data/result_data.pkl', 'wb') as outp:
+        filename = f"data/result_data_{name}.pkl"
+        with open(filename, 'wb') as outp:
             pickle.dump(IPCAs, outp, pickle.HIGHEST_PROTOCOL)
-        print("Result data saved to data/result_data.pkl")
+        print(f"Saved result data to {filename}")
     except:
         print("Couldn't export result data.")
-    
+
+def evaluate_IPCAs(IPCAs, name):
+    results = []
+    for K, model in enumerate(IPCAs, start=1):
+        results.append({
+                    "K": K,
+                    "R2_Total": round(float(model.r2.get("R_Tot", float("nan"))),4),
+                    "R2_Pred": round(float(model.r2.get("R_Prd", float("nan"))),4),
+                    "xR2_Total": round(float(model.r2.get("X_Tot", float("nan"))),4),
+                    "xR2_Pred": round(float(model.r2.get("X_Prd", float("nan"))),4),
+                })
+        
+        
+    df = pd.DataFrame(results)
+    filename = f"data/results_{name}.csv"
+    df.to_csv(filename, index=False)
+    print(f"Saved R2 results to {filename}")
+    print("\n=== R2 Results Outline ===")
+    print(tabulate(df, headers="keys", tablefmt="github", showindex=False))
 
 if __name__ == '__main__':
     
@@ -174,18 +203,19 @@ if __name__ == '__main__':
     if(download_input.lower() == "y"):
         dataset_input = input("Select your desired dataset [gukellyxiu | other]:\n")
         data, signal_names = download_data(dataset_input) # load your data here
+        data = preprocessing(data, signal_names)
     else:
         try:
-            with open('data/raw_data.pkl', 'rb') as inp:
+            with open('data/processed_data.pkl', 'rb') as inp:
                 data = pickle.load(inp)
-            print("Using previous raw data from data/raw_data.pkl.")
+            print("Using previous processed data from data/processed_data.pkl.")
             signal_names = [col for col in data.columns if col not in ["permno", "date","signals_date","ret","rf","excess_ret","sic2"]] # TODO find more dynamic solution
         except:
             print("Couldn't find suitable raw data.")    
     
-    data = preprocessing(data, signal_names)
     
-    outline_data(data)
+    
+    outline_data(data, signal_names)
 
     # construct Z and R as required by ipca (convert pd.Float64 to np.float32, drop date from index)
     # TODO check whether np.float32 conversion makes sense earlier. conversion is necessary
@@ -194,7 +224,7 @@ if __name__ == '__main__':
     R = {t: s["excess_ret"].astype(np.float32).droplevel("date") for t, s in data.groupby("date")}
     
     # IPCA: no anomaly
-    Ks = [5]
+    Ks = [1,2,3,4,5]
     IPCAs = []
 
     for K in Ks:
@@ -202,15 +232,31 @@ if __name__ == '__main__':
         model.run_ipca(dispIters=True)
         IPCAs.append(model)
 
-    save_data(IPCAs)    
+    save_data(IPCAs, name="no_anomaly")
+    evaluate_IPCAs(IPCAs,name="no_anomaly")
 
-    print(IPCAs[0].r2)
-    print(IPCAs[0].Gamma)
-    print(IPCAs[0].Fac)
-    IPCAs[0].visualize_factors()
-    IPCAs[0].visualize_gamma_heatmap()
+    # IPCA: with anomaly
+    Ks = [1,2,3,4,5]
+    IPCAs = []
+
+    gFac = pd.DataFrame(1., index=sorted(R.keys()), columns=['anomaly']).T
+
+    for K in Ks:
+        model = IPCA(Z, R=R, K=K, gFac=gFac)
+        model.run_ipca(dispIters=True)
+        IPCAs.append(model)
+
+    save_data(IPCAs,name="anomaly")    
+    evaluate_IPCAs(IPCAs,name="anomaly")
 
     """
+    # IPCA: no anomaly
+    IPCAs[0].r2
+    IPCAs[0].Gamma
+    IPCAs[0].Fac
+    IPCAs[0].visualize_factors()
+    IPCAs[0].visualize_gamma_heatmap()   
+
     # IPCA: with anomaly
     gFac = pd.DataFrame(1., index=sorted(R.keys()), columns=['anomaly']).T
     ipca_1 = IPCA(Z, R=R, K=K, gFac=gFac)
