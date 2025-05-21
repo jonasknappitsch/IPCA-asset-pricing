@@ -68,14 +68,17 @@ class IPCA(object):
         self.gLambd = self.gFac.mean(axis=1)
         self.fIdx, self.gIdx = list(map(str, range(1, K+1))), list(self.gFac.index)
         self.K, self.M, self.L, self.T = K, len(self.gIdx), len(self.charas), len(self.times)
-
+        
         # transformation inputs
         self.N_valid = pd.Series(index=self.times)
         if not self.X_only:
             self.X = pd.DataFrame(index=self.charas, columns=self.times)
         self.W = {t: pd.DataFrame(index=self.charas, columns=self.charas) for t in self.times}
         for t in self.times:
-            is_valid = pd.DataFrame({'z':self.Z[t].notnull().all(axis=1),'r':self.R[t].notnull()}).all(axis=1) # not valid if ret or any charas are missing
+            # validates that there are no assets with missing returns or characteristics
+            is_valid = pd.DataFrame({
+                'z':self.Z[t].notnull().all(axis=1),
+                'r':self.R[t].notnull()}).all(axis=1) 
             z_valid = self.Z[t].loc[is_valid.values,:]
             r_valid = self.R[t].loc[is_valid.values]
             self.N_valid[t] = (1. * is_valid).sum()
@@ -193,7 +196,7 @@ class IPCA(object):
                     Fac = fFac1[t]
                 FacOutProd = np.outer(Fac, Fac)
                 numer_t = np.kron(self.X[t], Fac) * self.N_valid[t]
-                denom_t = np.kron(self.W[t], FacOutProd) * self.N_valid[t]
+                denom_t = np.kron(self.W[t], FacOutProd) * self.N_valid[t] # this line takes most of the time
                 return numer_t, denom_t
             # n_jobs=-1 ensures all CPU cores available are used
             results = Parallel(n_jobs=-1, prefer="threads")(
@@ -261,23 +264,34 @@ class IPCA(object):
 
     ##### VISUALIZATIONS #####
 
-    def visualize_factors(self):
+    def visualize_factors(self, save_path=None):
         '''
         Plots time-series of all latent factors
+
+        [Inputs]
+        save_path (string): if given, stores the plot instead of showing it
         '''
         factors = self.Fac.T  # shape: T x K
 
         # plot time-series of latent factors
-        factors.plot(figsize=(10, 4), title='IPCA Latent Factors')
+        factors.plot(figsize=(10, 6), title='IPCA Latent Factors')
         plt.xlabel("Time")
         plt.ylabel("Factor Value")
         plt.grid(True)
         plt.tight_layout()
-        plt.show()
+
+        if save_path:
+            plt.savefig(save_path, dpi=300)
+            plt.close()
+        else:
+            plt.show()
     
-    def visualize_gamma_heatmap(self):
+    def visualize_gamma_heatmap(self, save_path=None):
         '''
         Plots heatmap of Gamma loadings of all latent factors
+
+        [Inputs]
+        save_path (string): if given, stores the plot instead of showing it
         '''
         gamma = self.Gamma
 
@@ -292,14 +306,20 @@ class IPCA(object):
         ax.set_xticklabels(ax.get_xticklabels(), rotation=0, ha='right', fontsize=10)
 
         plt.tight_layout()
-        plt.show()
 
-    def visualize_gamma_barplot(self, sorted=False):
+        if save_path:
+            plt.savefig(save_path, dpi=300)
+            plt.close()
+        else:
+            plt.show()
+
+    def visualize_gamma_barplot(self, sorted=False, save_path=None):
         '''
         Plots barplot of Gamma loadings for each latent factor
         
         [Inputs]
         sorted (bool): whether to sort by loading values or not
+        save_path (string): if given, stores the plot instead of showing it
         '''
         gamma = self.fGamma  # latent gamma only
         for i, factor_id in enumerate(gamma.columns):
@@ -313,7 +333,11 @@ class IPCA(object):
             ax.set_ylabel("Loading")
             ax.set_ylim(min(-0.8, loadings.min()*1.1), max(0.8, loadings.max()*1.1))
             plt.tight_layout()
-            plt.show()
+            if save_path:
+                plt.savefig(save_path, dpi=300)
+                plt.close()
+            else:
+                plt.show()
 
     ##### HYPOTHESIS TESTS #####
      
