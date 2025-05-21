@@ -215,6 +215,7 @@ if __name__ == '__main__':
     R = {t: s["excess_ret"].astype(np.float32).droplevel("date") for t, s in data.groupby("date")}
     
     # IPCA: no anomaly
+    
     Ks = [1,2,3,4,5]
     IPCAs = []
 
@@ -225,6 +226,7 @@ if __name__ == '__main__':
 
     save_data(IPCAs, name="no_anomaly")
     evaluate_IPCAs(IPCAs,name="no_anomaly")
+    
 
     # IPCA: with anomaly
     Ks = [1,2,3,4,5]
@@ -239,6 +241,38 @@ if __name__ == '__main__':
 
     save_data(IPCAs,name="anomaly")    
     evaluate_IPCAs(IPCAs,name="anomaly")
+    
+    ##### IPCA: with pre-specified factor (PSF) MKT as per CAPM #####
+    # TODO ipca doesn't seem to work with only gFac when no fFac is passed
+    '''
+    Ks = [1]
+    IPCAs = []
+
+    # retrieve MKT from ff.factors_monthly
+    wrds_conn = wrds.Connection()
+    mkt = wrds_conn.raw_sql("""
+        SELECT date, mktrf / 100 AS mktrf
+        FROM ff.factors_monthly
+    """, date_cols=["date"])
+
+    # align to date structure (e.g., day=28)
+    mkt['date'] = mkt['date'] - pd.DateOffset(days=1)
+    mkt['date'] = mkt['date'].apply(lambda d: d.replace(day=28))
+    mkt.set_index('date', inplace=True)
+
+    # define gFac based on CAPM MKT as PSF
+    gFac = mkt.reindex(sorted(R.keys()))  # R is your dictionary of excess returns
+    gFac = gFac.T  # transpose: rows = factor(s), cols = time
+    gFac.index = ['mkt']  # name the factor
+
+    for K in Ks:
+        model = IPCA(Z, R=R, K=K, gFac=gFac)
+        model.run_ipca(dispIters=True)
+        IPCAs.append(model)
+
+    save_data(IPCAs,name="PSF_CAPM")    
+    evaluate_IPCAs(IPCAs,name="PSF_CAPM")
+    '''
 
     """
     # IPCA: no anomaly
