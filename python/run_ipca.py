@@ -89,12 +89,8 @@ def download_data(dataset="gukellyxiu"):
         
         # set entity-time multi-index
         data = data.set_index(['permno','date'])
-
-    elif(dataset=="other"):
-        # if user wants to use any other dataset, implement here...
-        raise NotImplementedError('Please implement support for other dataset first.')
     else:
-        raise NotImplementedError('No valid dataset selected.')
+        raise NotImplementedError('Selected dataset is not supported. Please implement first.')
     
     try:
         with open('data/raw_data.pkl', 'wb') as outp:
@@ -122,18 +118,11 @@ def preprocessing(data, signal_names):
     # 3. remove rows where all signals are missing (e.g. due to lagging)
     processed_data = processed_data.dropna(subset=signal_names, how='all')
     
-    # 4. standardize by performing rank-normalization among non-missing observations
+    # 4. standardize by performing rank-normalization among non-missing (caveat) observations
     for col in signal_names:
-        # rank characteristics cross-sectionally by date while ignoring NAs
-        ranks = processed_data[col].groupby(level='date').transform(
-            lambda x: x.rank(method='average', na_option='keep')
+        processed_data[col] = processed_data.groupby(level='date')[col].transform(
+            lambda x: (x.rank(method='average', na_option='keep') - 1) / (x.notnull().sum() - 1) - 0.5
         )
-        # get # of non-missing observations per date
-        counts = processed_data[col].groupby(level='date').transform(
-            lambda x: x.notnull().sum()
-        )
-        # map into [-0.5, 0.5] interval among non-missing observations
-        processed_data[col] = (ranks / counts) - 0.5
 
     # 5. impute missing values with median, which equals 0 after standardization
     processed_data[signal_names] = processed_data[signal_names].fillna(0)
@@ -188,7 +177,9 @@ def evaluate_IPCAs(IPCAs, name):
                     "xR2_Total": round(float(model.r2.get("X_Tot", float("nan"))),4),
                     "xR2_Pred": round(float(model.r2.get("X_Prd", float("nan"))),4),
                 })
-        
+        filename = f"data/results_{name}"
+        model.visualize_factors(save_path=f"{filename}_factors_K{K}.png")
+        model.visualize_gamma_heatmap(save_path=f"{filename}_gamma_heatmap_K{K}.png")
         
     df = pd.DataFrame(results)
     filename = f"data/results_{name}.csv"
@@ -199,9 +190,9 @@ def evaluate_IPCAs(IPCAs, name):
 
 if __name__ == '__main__':
     
-    download_input = input("Do you want to download new data (y)?\n")
+    download_input = input("Do you want to download new data (y)? ")
     if(download_input.lower() == "y"):
-        dataset_input = input("Select your desired dataset [gukellyxiu | other]:\n")
+        dataset_input = input("Choose dataset (default: gukellyxiu): ").strip() or "gukellyxiu"
         data, signal_names = download_data(dataset_input) # load your data here
         data = preprocessing(data, signal_names)
     else:
@@ -211,7 +202,7 @@ if __name__ == '__main__':
             print("Using previous processed data from data/processed_data.pkl.")
             signal_names = [col for col in data.columns if col not in ["permno", "date","signals_date","ret","rf","excess_ret","sic2"]] # TODO find more dynamic solution
         except:
-            print("Couldn't find suitable raw data.")    
+            print("Couldn't find suitable processed data as input.")    
     
     
     
