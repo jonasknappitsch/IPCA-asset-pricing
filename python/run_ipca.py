@@ -6,12 +6,65 @@ import wrds # datasets
 import matplotlib.pyplot as plt # visualization
 from tabulate import tabulate # print formatted 
 
-def download_data(dataset="gukellyxiu"):
-    if(dataset=="gukellyxiu"):
+def download_data(dataset="fnw"):
+    if(dataset=="fnw"):
+        '''
+        Source: Freyberger, Neuhierl and Weber (2017) "Dissecting Characteristics Nonparametrically"
+        As used in: Kelly, Pruitt and Su (2019) "Characteristics are Covariances"
+        Provided by:
+        - https://sethpruitt.net/
+        - https://sethpruitt.net/research/
+        '''
+
+        try:
+            signals = pd.read_csv('data/fnw.csv', delimiter=',')
+            print("Signal data loaded successfully.")
+        except FileNotFoundError:
+            print("Couldn't find suitable data. Please provide 'data/fnw.csv'")
+
+        # drop metadata and non-needed columns
+        signals = signals.drop(columns=['Unnamed: 0', 'yy', 'mm','q10', 'q20', 'q50', 'prc'])
+
+        signals['date'] = pd.to_datetime(signals['date'])
+        
+        # signals['date'] = signals['date'].apply(lambda d: d.replace(day=28)) # TODO only needed in case of merge
+
+        # rename ret to use excess_ret (TODO check whether ret in fnw is already excess_ret)
+        signals = signals.rename(columns={'ret': 'excess_ret'})
+
+        # rename variables based on Freyberger Neuhierl Weber (2017) to adhere to naming of Kelly Pruitt Su (2019)
+        rename_map = {
+            "at": "assets",
+            "beme": "bm",
+            "free_cf": "freecf",
+            "idio_vol": "idiovol",
+            "lme": "mktcap",
+            "lturnover": "turn",
+            "rel_to_high_price": "w52h",
+            "cum_return_12_2": "mom",
+            "cum_return_12_7": "intmom",
+            "cum_return_1_0": "strev",
+            "cum_return_36_13": "ltrev",
+            "sga2m": "sga2s",
+            "spread_mean": "bidask"
+        }
+        signals = signals.rename(columns=rename_map)
+
+        # set entity-time multi-index
+        signals = signals.set_index(['permno', 'date'])
+
+        # retrieve signal names
+        non_signal_cols = ['excess_ret']
+        signal_names = [col for col in signals.columns if col not in non_signal_cols]
+
+        data = signals
+
+    elif(dataset=="gukellyxiu"):
         '''
         Source: Gu, Kelly and Xiu (2020) "Empirical Asset Pricing via Machine Learning"
-        https://dachxiu.chicagobooth.edu
-        https://dachxiu.chicagobooth.edu/download/datashare.zip
+        Provided by:
+        - https://dachxiu.chicagobooth.edu
+        - https://dachxiu.chicagobooth.edu/download/datashare.zip
         '''
         
         try:
@@ -71,6 +124,7 @@ def download_data(dataset="gukellyxiu"):
         crsp['permno'] = crsp['permno'].astype('int32')
 
         # download Fama-French risk-free rate for excess returns
+        # TODO check if rf should scaled somehow (eg /100, *100), s.t. SELECT date, rf / 100 AS rf
         rf = wrds_conn.raw_sql("""
                         SELECT date, rf
                         FROM ff.factors_monthly
@@ -119,13 +173,30 @@ def preprocessing(data, signal_names):
     processed_data = processed_data.dropna(subset=signal_names, how='all')
     
     # 4. standardize by performing rank-normalization among non-missing (caveat) observations
+    
     for col in signal_names:
         processed_data[col] = processed_data.groupby(level='date')[col].transform(
-            lambda x: (x.rank(method='average', na_option='keep') - 1) / (x.notnull().sum() - 1) - 0.5
+            lambda x: ((x.rank(method='average', na_option='keep') - 1) / (x.count() - 1)) - 0.5
         )
-
+    
+    '''for col in signal_names:
+        # rank characteristics cross-sectionally by date while ignoring NAs
+        ranks = processed_data[col].groupby(level='date').transform(
+            lambda x: x.rank(method='average', na_option='keep')
+        )
+        # get # of non-missing observations per date
+        counts = processed_data[col].groupby(level='date').transform(
+            lambda x: x.notnull().sum()
+        )
+        # map into [-0.5, 0.5] interval among non-missing observations
+        processed_data[col] = (ranks / counts) - 0.5'''
+        
     # 5. impute missing values with median, which equals 0 after standardization
     processed_data[signal_names] = processed_data[signal_names].fillna(0)
+
+    # 6. add constant
+    processed_data["const"] = 1.0
+    signal_names.append("const")
 
     try:
         with open('data/processed_data.pkl', 'wb') as outp:
@@ -134,7 +205,7 @@ def preprocessing(data, signal_names):
     except:
         print("Couldn't save processed data.")
     
-    return(processed_data)
+    return(processed_data, signal_names)
 
 def outline_data(data, signal_names):
     summary = {}
@@ -152,6 +223,7 @@ def outline_data(data, signal_names):
     summary['Average assets per month'] = avg_assets_per_month
     summary['Start date'] = start_date
     summary['End date'] = end_date
+    summary['Number of characteristics'] = len(signal_names)
 
     outline = pd.DataFrame.from_dict(summary, orient='index', columns=['Value'])
 
@@ -169,7 +241,8 @@ def save_data(IPCAs, name):
 
 def evaluate_IPCAs(IPCAs, name):
     results = []
-    for K, model in enumerate(IPCAs, start=1):
+    for model in IPCAs:
+        K = model.K
         results.append({
                     "K": K,
                     "R2_Total": round(float(model.r2.get("R_Tot", float("nan"))),4),
@@ -190,11 +263,11 @@ def evaluate_IPCAs(IPCAs, name):
 
 if __name__ == '__main__':
     
-    download_input = input("Do you want to download new data (y)? ")
+    download_input = input("Do you want to download new data [y (default) | n]? ") or "y"
     if(download_input.lower() == "y"):
-        dataset_input = input("Choose dataset (default: gukellyxiu): ").strip() or "gukellyxiu"
+        dataset_input = input("Choose dataset [fnw (default) | gukellyxiu | other]: ").strip() or "fnw"
         data, signal_names = download_data(dataset_input) # load your data here
-        data = preprocessing(data, signal_names)
+        data, signal_names = preprocessing(data, signal_names)
     else:
         try:
             with open('data/processed_data.pkl', 'rb') as inp:
@@ -203,8 +276,6 @@ if __name__ == '__main__':
             signal_names = [col for col in data.columns if col not in ["permno", "date","signals_date","ret","rf","excess_ret","sic2"]] # TODO find more dynamic solution
         except:
             print("Couldn't find suitable processed data as input.")    
-    
-    
     
     outline_data(data, signal_names)
 
@@ -216,7 +287,7 @@ if __name__ == '__main__':
     
     # IPCA: no anomaly
     
-    Ks = [1,2,3,4,5]
+    Ks = [1,2,3,4,5,6]
     IPCAs = []
 
     for K in Ks:
@@ -229,7 +300,7 @@ if __name__ == '__main__':
     
 
     # IPCA: with anomaly
-    Ks = [1,2,3,4,5]
+    Ks = [1,2,3,4,5,6]
     IPCAs = []
 
     gFac = pd.DataFrame(1., index=sorted(R.keys()), columns=['anomaly']).T
