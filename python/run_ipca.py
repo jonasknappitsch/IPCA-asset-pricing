@@ -27,10 +27,22 @@ def download_data(dataset="fnw"):
 
         signals['date'] = pd.to_datetime(signals['date'])
         
-        # signals['date'] = signals['date'].apply(lambda d: d.replace(day=28)) # TODO only needed in case of merge
+        # set date from end of month to 28th to allow join with rf rate
+        signals['date'] = signals['date'].apply(lambda d: d.replace(day=28)) 
+        
+        # download Fama-French risk-free rate to compute excess returns
+        wrds_conn = wrds.Connection()
+        rf = wrds_conn.raw_sql("""
+                        SELECT date, rf
+                        FROM ff.factors_monthly
+                        """, date_cols=["date"])
 
-        # rename ret to use excess_ret (TODO check whether ret in fnw is already excess_ret)
-        signals = signals.rename(columns={'ret': 'excess_ret'})
+        # change ff date from 1st day of month to 28th to allow join
+        rf['date'] = rf['date'].apply(lambda d: d.replace(day=28))
+
+        # merge crsp returns with rf and compute excess returns
+        signals = signals.merge(rf, on='date', how='left')
+        signals['excess_ret'] = signals['ret'] - signals['rf']
 
         # rename variables based on Freyberger Neuhierl Weber (2017) to adhere to naming of Kelly Pruitt Su (2019)
         rename_map = {
@@ -54,7 +66,7 @@ def download_data(dataset="fnw"):
         signals = signals.set_index(['permno', 'date'])
 
         # retrieve signal names
-        non_signal_cols = ['excess_ret']
+        non_signal_cols = ['excess_ret','ret','rf']
         signal_names = [col for col in signals.columns if col not in non_signal_cols]
 
         data = signals
@@ -124,14 +136,12 @@ def download_data(dataset="fnw"):
         crsp['permno'] = crsp['permno'].astype('int32')
 
         # download Fama-French risk-free rate for excess returns
-        # TODO check if rf should scaled somehow (eg /100, *100), s.t. SELECT date, rf / 100 AS rf
         rf = wrds_conn.raw_sql("""
                         SELECT date, rf
                         FROM ff.factors_monthly
                         """, date_cols=["date"])
 
-        # change ff date from 1st of month to 28th of previous month to allow join
-        rf['date'] = rf['date'] - pd.DateOffset(days=1)
+        # change ff date from 1st day of month to 28th to allow join
         rf['date'] = rf['date'].apply(lambda d: d.replace(day=28))
 
         # merge crsp returns with rf and compute excess returns
