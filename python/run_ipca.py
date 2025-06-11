@@ -20,7 +20,7 @@ def download_data(dataset="fnw"):
             signals = pd.read_csv('data/fnw.csv', delimiter=',')
             print("Signal data loaded successfully.")
         except FileNotFoundError:
-            print("Couldn't find suitable data. Please provide 'data/fnw.csv'")
+            print("Couldn't find suitable data. Please provide 'data/fnw/fnw.csv'")
 
         # drop metadata and non-needed columns
         signals = signals.drop(columns=['Unnamed: 0', 'yy', 'mm','q10', 'q20', 'q50', 'prc'])
@@ -80,10 +80,10 @@ def download_data(dataset="fnw"):
         '''
         
         try:
-            signals = pd.read_csv('data/gukellyxiu.csv', delimiter=',')
+            signals = pd.read_csv('data/gkx/gkx.csv', delimiter=',')
             print("Signal data loaded successfully.")
         except FileNotFoundError:
-            print("Couldn't find suitable data. Please provide 'data/gukellyxiu.csv'")
+            print("Couldn't find suitable data. Please provide 'data/gkx/gkx.csv'")
 
         # set entity-time multi-index (permno, date)
         signals = signals.rename(columns={'DATE': 'date'})
@@ -99,7 +99,7 @@ def download_data(dataset="fnw"):
         
         if use_frequency_lag:
             # advanced lag based on signal frequency
-            characteristics_table = pd.read_csv('data/characteristics_table.csv', delimiter=',')
+            characteristics_table = pd.read_csv('data/gkx/characteristics_table_gkx.csv', delimiter=',')
             lag_frequency = {'Monthly': 1, 'Quarterly': 4, 'Annual': 6} # TODO check 1,4,6 (pref) or 1,5,7
             lag_map = characteristics_table.set_index('Acronym')['Frequency'].map(lag_frequency).to_dict() # lag map as per Gu Kelly Xiu (2020)
             
