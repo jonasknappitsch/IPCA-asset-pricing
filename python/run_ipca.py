@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 import pickle
@@ -17,10 +18,10 @@ def download_data(dataset="fnw"):
         '''
 
         try:
-            signals = pd.read_csv('data/fnw.csv', delimiter=',')
+            signals = pd.read_csv(f'data/{dataset}/fnw.csv', delimiter=',')
             print("Signal data loaded successfully.")
         except FileNotFoundError:
-            print("Couldn't find suitable data. Please provide 'data/fnw/fnw.csv'")
+            print(f"Couldn't find suitable data. Please provide 'data/{dataset}/fnw.csv'")
 
         # drop metadata and non-needed columns
         signals = signals.drop(columns=['Unnamed: 0', 'yy', 'mm','q10', 'q20', 'q50', 'prc'])
@@ -70,6 +71,73 @@ def download_data(dataset="fnw"):
         signal_names = [col for col in signals.columns if col not in non_signal_cols]
 
         data = signals
+    elif(dataset=="oap"):
+        '''
+        Source: Chen and Zimmermann (2021) "Open Source Cross-Sectional Asset Pricing"
+        Provided by:
+        - https://www.openassetpricing.com
+        - https://github.com/mk0417/open-asset-pricing-download
+        '''
+
+        try:
+            import openassetpricing as oap
+            openap = oap.OpenAP(202408)
+            signals = openap.dl_all_signals('pandas') # download all signals
+        except:
+            print("Couldn't download openassetpricing data. Please check specification.")
+        
+        print("Signals: ", signals)
+        # lag to ensure return at t is predicted by signals at t+1, assume signal is available for trading end of month (28th)
+        lagged_signals = signals.copy()
+        lagged_signals["date"] = pd.to_datetime(signals["yyyymm"].astype(str) + "28", format="%Y%m%d") + pd.DateOffset(months=1)
+        lagged_signals = lagged_signals.set_index(['permno', 'date'])
+        print("Lagged signals: ", lagged_signals)
+
+        # drop metadata and non-needed columns
+        lagged_signals = lagged_signals.drop(columns=['yyyymm'])
+
+        # construct signal_names but exclude any non-signal columns
+        non_signal_cols = ['']
+        signal_names = [col for col in lagged_signals.columns if col not in non_signal_cols]
+
+        # download WRDS CRSP return data
+        wrds_conn = wrds.Connection()
+        crsp = wrds_conn.raw_sql("""
+                        SELECT a.permno, a.date, a.ret*100 as ret
+                        FROM crsp.msf AS a
+                        JOIN crsp.msenames AS c 
+                            ON a.permno = c.permno
+                            AND a.date >= c.namedt
+                            AND a.date <= c.nameendt
+                        WHERE c.shrcd in (10, 11, 12) 
+                            AND c.exchcd in (1, 2, 3)
+            """, date_cols=["date"])
+
+        # change crsp date day to 28th to allow join
+        crsp['date'] = crsp['date'].apply(lambda d: d.replace(day=28))
+
+        # change crsp permno dtype to int32 for memory alignment # TODO harmonize memory conversions
+        crsp['permno'] = crsp['permno'].astype('int32')
+
+        # download Fama-French risk-free rate for excess returns
+        rf = wrds_conn.raw_sql("""
+                        SELECT date, rf
+                        FROM ff.factors_monthly
+                        """, date_cols=["date"])
+
+        # change ff date from 1st day of month to 28th to allow join
+        rf['date'] = rf['date'].apply(lambda d: d.replace(day=28))
+
+        # merge crsp returns with rf and compute excess returns
+        crsp = crsp.merge(rf, on='date', how='left')
+        crsp['excess_ret'] = crsp['ret'] - crsp['rf']
+
+        # merge data by left join return on signals
+        data = lagged_signals.merge(crsp[['permno', 'date', 'ret', 'rf','excess_ret']], on=['permno', 'date'], how='left')
+        
+        # set entity-time multi-index
+        data = data.set_index(['permno','date'])
+        print(data)
 
     elif(dataset=="gukellyxiu"):
         '''
@@ -80,10 +148,10 @@ def download_data(dataset="fnw"):
         '''
         
         try:
-            signals = pd.read_csv('data/gkx/gkx.csv', delimiter=',')
+            signals = pd.read_csv(f'data/{dataset}/gkx.csv', delimiter=',')
             print("Signal data loaded successfully.")
         except FileNotFoundError:
-            print("Couldn't find suitable data. Please provide 'data/gkx/gkx.csv'")
+            print(f"Couldn't find suitable data. Please provide 'data/{dataset}/gkx.csv'")
 
         # set entity-time multi-index (permno, date)
         signals = signals.rename(columns={'DATE': 'date'})
@@ -99,7 +167,7 @@ def download_data(dataset="fnw"):
         
         if use_frequency_lag:
             # advanced lag based on signal frequency
-            characteristics_table = pd.read_csv('data/gkx/characteristics_table_gkx.csv', delimiter=',')
+            characteristics_table = pd.read_csv(f'data/{dataset}/characteristics_table_gkx.csv', delimiter=',')
             lag_frequency = {'Monthly': 1, 'Quarterly': 4, 'Annual': 6} # TODO check 1,4,6 (pref) or 1,5,7
             lag_map = characteristics_table.set_index('Acronym')['Frequency'].map(lag_frequency).to_dict() # lag map as per Gu Kelly Xiu (2020)
             
@@ -157,15 +225,15 @@ def download_data(dataset="fnw"):
         raise NotImplementedError('Selected dataset is not supported. Please implement first.')
     
     try:
-        with open('data/raw_data.pkl', 'wb') as outp:
+        with open(f'data/{dataset}/raw_data.pkl', 'wb') as outp:
             pickle.dump(data, outp, pickle.HIGHEST_PROTOCOL)
-        print("Raw data saved to data/raw_data.pkl")
+        print(f"Raw data saved to data/{dataset}/raw_data.pkl")
     except:
         print("Couldn't save raw data.")
 
     return(data, signal_names)
 
-def preprocessing(data, signal_names):
+def preprocessing(data, dataset, signal_names):
     print("Preprocessing data...")
 
     # 1. filter by date pursuant to Gu Kelly Xiu 2020 (TODO consider removing observations before 1963/1980, cf. Chen and McCoy 2024)
@@ -209,9 +277,9 @@ def preprocessing(data, signal_names):
     signal_names.append("const")
 
     try:
-        with open('data/processed_data.pkl', 'wb') as outp:
+        with open(f'data/{dataset}/processed_data.pkl', 'wb') as outp:
             pickle.dump(processed_data, outp, pickle.HIGHEST_PROTOCOL)
-        print("Processed data saved to data/processed_data.pkl")
+        print(f"Processed data saved to data/{dataset}/processed_data.pkl")
     except:
         print("Couldn't save processed data.")
     
@@ -240,16 +308,16 @@ def outline_data(data, signal_names):
     print("\n=== Data Outline ===")
     print(tabulate(outline, headers=['Metric', 'Value'], tablefmt='github', floatfmt='.2f'))
 
-def save_data(IPCAs, name):
+def save_data(IPCAs, dataset, name):
     try:
-        filename = f"data/result_data_{name}.pkl"
+        filename = f"data/{dataset}/result_data_{name}.pkl"
         with open(filename, 'wb') as outp:
             pickle.dump(IPCAs, outp, pickle.HIGHEST_PROTOCOL)
         print(f"Saved result data to {filename}")
     except:
         print("Couldn't export result data.")
 
-def evaluate_IPCAs(IPCAs, name):
+def evaluate_IPCAs(IPCAs, dataset, name):
     results = []
     for model in IPCAs:
         K = model.K
@@ -260,32 +328,40 @@ def evaluate_IPCAs(IPCAs, name):
                     "xR2_Total": round(float(model.r2.get("X_Tot", float("nan"))),4),
                     "xR2_Pred": round(float(model.r2.get("X_Prd", float("nan"))),4),
                 })
-        filename = f"data/results_{name}"
+        filename = f"data/{dataset}/results_{name}"
         model.visualize_factors(save_path=f"{filename}_factors_K{K}.png")
         model.visualize_gamma_heatmap(save_path=f"{filename}_gamma_heatmap_K{K}.png")
         
     df = pd.DataFrame(results)
-    filename = f"data/results_{name}.csv"
-    df.to_csv(filename, index=False)
-    print(f"Saved R2 results to {filename}")
+    csv_filename = f"{filename}.csv"
+    df.to_csv(csv_filename, index=False)
+    print(f"Saved R2 results to {csv_filename}")
     print("\n=== R2 Results Outline ===")
     print(tabulate(df, headers="keys", tablefmt="github", showindex=False))
 
 if __name__ == '__main__':
     
-    download_input = input("Do you want to download new data [y (default) | n]? ") or "y"
-    if(download_input.lower() == "y"):
-        dataset_input = input("Choose dataset [fnw (default) | gukellyxiu | other]: ").strip() or "fnw"
-        data, signal_names = download_data(dataset_input) # load your data here
-        data, signal_names = preprocessing(data, signal_names)
-    else:
-        try:
-            with open('data/processed_data.pkl', 'rb') as inp:
+    '''
+    Data is always stored under 'data/{dataset}'.
+    Program will look for previously downloaded 'processed_data.pkl', otherwise download new data.
+    '''
+    dataset = input("Choose dataset [ fnw (default) | gkx | oap ]: ").strip() or "fnw"
+
+    if(os.path.exists(f'data/{dataset}/processed_data.pkl')):
+        download_input = input(f"Previous data found for dataset {dataset}. Continue with previous data? [y (default) | n]") or "y"
+        if(download_input.lower() == "y"):
+            with open(f'data/{dataset}/processed_data.pkl', 'rb') as inp:
                 data = pickle.load(inp)
-            print("Using previous processed data from data/processed_data.pkl.")
+            print(f"Using previous processed data from data/{dataset}/processed_data.pkl.")
             signal_names = [col for col in data.columns if col not in ["permno", "date","signals_date","ret","rf","excess_ret","sic2"]] # TODO find more dynamic solution
-        except:
-            print("Couldn't find suitable processed data as input.")    
+        else:
+            print(f"Downloading new data for dataset {dataset}.")
+            data, signal_names = download_data(dataset) # load your data here
+            data, signal_names = preprocessing(data, dataset, signal_names)
+    else:
+        print(f"Downloading data for dataset {dataset}.")
+        data, signal_names = download_data(dataset) # load your data here
+        data, signal_names = preprocessing(data, dataset, signal_names)
     
     outline_data(data, signal_names)
 
@@ -305,10 +381,9 @@ if __name__ == '__main__':
         model.run_ipca(dispIters=True)
         IPCAs.append(model)
 
-    save_data(IPCAs, name="no_anomaly")
-    evaluate_IPCAs(IPCAs,name="no_anomaly")
+    save_data(IPCAs, dataset, name="no_anomaly")
+    evaluate_IPCAs(IPCAs, dataset, name="no_anomaly")
     
-
     # IPCA: with anomaly
     Ks = [1,2,3,4,5,6]
     IPCAs = []
@@ -320,8 +395,8 @@ if __name__ == '__main__':
         model.run_ipca(dispIters=True)
         IPCAs.append(model)
 
-    save_data(IPCAs,name="anomaly")    
-    evaluate_IPCAs(IPCAs,name="anomaly")
+    save_data(IPCAs,dataset,name="anomaly")    
+    evaluate_IPCAs(IPCAs,dataset,name="anomaly")
     
     ##### IPCA: with pre-specified factor (PSF) MKT as per CAPM #####
     # TODO ipca doesn't seem to work with only gFac when no fFac is passed
