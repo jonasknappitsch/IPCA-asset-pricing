@@ -103,7 +103,7 @@ def download_data(dataset="fnw"):
         # download WRDS CRSP return data
         wrds_conn = wrds.Connection()
         crsp = wrds_conn.raw_sql("""
-                        SELECT a.permno, a.date, a.ret*100 as ret
+                        SELECT a.permno, a.date, a.ret
                         FROM crsp.msf AS a
                         JOIN crsp.msenames AS c 
                             ON a.permno = c.permno
@@ -187,7 +187,7 @@ def download_data(dataset="fnw"):
         # download WRDS CRSP return data
         wrds_conn = wrds.Connection()
         crsp = wrds_conn.raw_sql("""
-                        SELECT a.permno, a.date, a.ret*100 as ret
+                        SELECT a.permno, a.date, a.ret as ret
                         FROM crsp.msf AS a
                         JOIN crsp.msenames AS c 
                             ON a.permno = c.permno
@@ -348,7 +348,7 @@ if __name__ == '__main__':
     dataset = input("Choose dataset [ fnw (default) | gkx | oap ]: ").strip() or "fnw"
 
     if(os.path.exists(f'data/{dataset}/processed_data.pkl')):
-        download_input = input(f"Previous data found for dataset {dataset}. Continue with previous data? [y (default) | n]") or "y"
+        download_input = input(f"Previous data found for dataset {dataset}. Continue with previous data? [y (default) | n] ") or "y"
         if(download_input.lower() == "y"):
             with open(f'data/{dataset}/processed_data.pkl', 'rb') as inp:
                 data = pickle.load(inp)
