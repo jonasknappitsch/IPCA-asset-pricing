@@ -2,6 +2,7 @@
 IPCA algorithm and applications:
 Kelly, Bryan T. and Pruitt, Seth and Su, Yinan, Characteristics Are Covariances:
 A Unified Model of Risk and Return. JFE. (2018)
+https://www.dropbox.com/scl/fo/309bktmb7pc6oihtn1cpe/ALKrhMV_GCh9HrDUuAfGaDI?dl=0&e=1&preview=IPCA_empirical_GB.m&rlkey=rg99gls2dr8q4got2bq00cdyx
 
 Base python implementation:
 Liz Chen at AQR Capital Management (2019)
@@ -113,7 +114,7 @@ class IPCA(object):
           This is because the convergence of the algorithm mostly comes from GammaBeta being stable,
           and 1e-6 is small given that GammaBeta is always rotated to be orthonormal.
         '''
-        # initial guess
+        # initial guess starting from PCA SVD
         Gamma0 = GammaDelta0 = pd.DataFrame(0., index=self.charas, columns=self.gIdx)
         if self.has_latent:
             svU, svS, svV = ssla.svds(self.X.values, self.K)
@@ -161,7 +162,7 @@ class IPCA(object):
 
         [Inputs]
         Gamma0 (df(Lx(K+M))): previous iteration's Gamma estimate
-        parallel (bool): whether to use parallelized estimation (can reduce time per iteration)
+        parallel (bool): whether to use parallelized estimation (can reduce time per iteration for larger datasets)
 
         [Outputs]
         Gamma1 (df(Lx(K+M))): current iteration's Gamma estimate
@@ -230,8 +231,8 @@ class IPCA(object):
             GammaBeta1, fFac1 = _sign_convention(GammaBeta1, fFac1)
 
             if self.has_prespec: # orthogonality between GammaBeta and GammaDelta
-                GammaDelta1 = (np.identity(self.L) - GammaBeta1.dot(GammaBeta1.T)).dot(GammaDelta1)
                 fFac1 += GammaBeta1.T.dot(GammaDelta1).dot(self.gFac) # (K x M reg coef) * gFac
+                GammaDelta1 = (np.identity(self.L) - GammaBeta1.dot(GammaBeta1.T)).dot(GammaDelta1) # orthagonalize GammaDelta AFTER rotating F_New estimate
                 GammaBeta1, fFac1 = _sign_convention(GammaBeta1, fFac1)
 
             Gamma1 = pd.concat([GammaBeta1, GammaDelta1], axis=1)
