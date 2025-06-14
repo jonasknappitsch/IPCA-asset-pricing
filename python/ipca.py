@@ -146,11 +146,17 @@ class IPCA(object):
         print(f"ALS total time: {end_time - start_time:.2f} seconds")
 
         self.Gamma, self.fGamma, self.gGamma = Gamma1, Gamma1[self.fIdx], Gamma1[self.gIdx]
-        if self.has_prespec:
+        
+        if self.has_latent and self.has_prespec:
             self.Fac = pd.concat([fFac1, self.gFac])
-        else:
+        elif self.has_latent and not self.has_prespec:
             self.Fac = fFac1
+        elif self.has_prespec and not self.has_latent:
+            self.Fac = self.gFac
+        else:
+            raise ValueError("Both (latent) fFac and (pre-specified) gFac are missing.")
         self.fFac = fFac1
+
         self.Lambd, self.fLambd = self.Fac.mean(axis=1), self.fFac.mean(axis=1)
 
         if fit: # default to automatically compute fitted values
@@ -191,10 +197,14 @@ class IPCA(object):
             # Parallelized Estimation
             # helper function for parallel execution of timestamps
             def compute_time_contribution(t):
-                if self.has_prespec:
+                if self.has_latent and self.has_prespec:
                     Fac = pd.concat([fFac1[t], self.gFac[t]])
-                else:
+                elif self.has_latent and not self.has_prespec:
                     Fac = fFac1[t]
+                elif self.has_prespec and not self.has_latent:
+                    Fac = self.gFac[t]
+                else:
+                    raise ValueError("Both (latent) fFac and (pre-specified) gFac are missing at time t.")
                 FacOutProd = np.outer(Fac, Fac)
                 numer_t = np.kron(self.X[t], Fac) * self.N_valid[t]
                 denom_t = np.kron(self.W[t], FacOutProd) * self.N_valid[t] # this line takes most of the time
@@ -209,10 +219,14 @@ class IPCA(object):
         else:
             # Non-Parallelized Estimation
             for t in self.times:
-                if self.has_prespec:
+                if self.has_latent and self.has_prespec:
                     Fac = pd.concat([fFac1[t], self.gFac[t]])
-                else:
+                elif self.has_latent and not self.has_prespec:
                     Fac = fFac1[t]
+                elif self.has_prespec and not self.has_latent:
+                    Fac = self.gFac[t]
+                else:
+                    raise ValueError("Both (latent) fFac and (pre-specified) gFac are missing at time t.")
                 FacOutProd = np.outer(Fac, Fac)
                 numer += np.kron(self.X[t], Fac) * self.N_valid[t]
                 denom += np.kron(self.W[t], FacOutProd) * self.N_valid[t] # this line takes most of the time
