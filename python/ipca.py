@@ -133,7 +133,7 @@ class IPCA(object):
             Gamma1, fFac1 = self._ipca_als_estimation(Gamma0,parallel)
             tol_Gamma = abs(Gamma1 - Gamma0).values.max()
             tol_fFac = abs(fFac1 - fFac0).values.max() if self.has_latent else None
-            tol = max(tol_Gamma, tol_fFac)
+            tol = max(x for x in [tol_Gamma, tol_fFac] if x is not None)
 
             if dispIters:
                 print('iter {}: tolGamma = {} and tolFac = {}'.format(iter, tol_Gamma, tol_fFac))

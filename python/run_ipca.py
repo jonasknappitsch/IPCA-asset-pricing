@@ -414,20 +414,19 @@ if __name__ == '__main__':
     evaluate_IPCAs(IPCAs,dataset,name="anomaly")
     
     ##### IPCA: with pre-specified factor (PSF) MKT as per CAPM #####
-    # TODO ipca doesn't seem to work with only gFac when no fFac is passed
     '''
-    Ks = [1]
+    Ks = []
     IPCAs = []
 
-    # retrieve MKT from ff.factors_monthly
+    # retrieve MKT from ff.factors_monthly, which is excess return on the market
     wrds_conn = wrds.Connection()
     mkt = wrds_conn.raw_sql("""
-        SELECT date, mktrf / 100 AS mktrf
+        SELECT date, mktrf
         FROM ff.factors_monthly
     """, date_cols=["date"])
 
     # align to date structure (e.g., day=28)
-    mkt['date'] = mkt['date'] - pd.DateOffset(days=1)
+    # mkt['date'] = mkt['date'] - pd.DateOffset(days=1)
     mkt['date'] = mkt['date'].apply(lambda d: d.replace(day=28))
     mkt.set_index('date', inplace=True)
 
@@ -436,13 +435,13 @@ if __name__ == '__main__':
     gFac = gFac.T  # transpose: rows = factor(s), cols = time
     gFac.index = ['mkt']  # name the factor
 
-    for K in Ks:
-        model = IPCA(Z, R=R, K=K, gFac=gFac)
-        model.run_ipca(dispIters=True)
-        IPCAs.append(model)
+    model = IPCA(Z, R=R, gFac=gFac)
+    model.run_ipca(dispIters=True)
+    
+    IPCAs.append(model)
 
-    save_data(IPCAs,name="PSF_CAPM")    
-    evaluate_IPCAs(IPCAs,name="PSF_CAPM")
+    save_data(IPCAs,dataset,name="PSF_CAPM")    
+    evaluate_IPCAs(IPCAs,dataset,name="PSF_CAPM")
     '''
 
     """
