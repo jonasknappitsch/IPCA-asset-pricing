@@ -42,8 +42,8 @@ def download_data(dataset="fnw"):
         rf['date'] = rf['date'].apply(lambda d: d.replace(day=28))
 
         # merge crsp returns with rf and compute excess returns
-        signals = signals.merge(rf, on='date', how='left')
-        signals['excess_ret'] = signals['ret'] - signals['rf']
+        data = signals.merge(rf, on='date', how='left')
+        data['excess_ret'] = data['ret'] - data['rf']
 
         # rename variables based on Freyberger Neuhierl Weber (2017) to adhere to naming of Kelly Pruitt Su (2019)
         rename_map = {
@@ -61,16 +61,17 @@ def download_data(dataset="fnw"):
             "sga2m": "sga2s",
             "spread_mean": "bidask"
         }
-        signals = signals.rename(columns=rename_map)
+        data = data.rename(columns=rename_map)
 
         # set entity-time multi-index
-        signals = signals.set_index(['permno', 'date'])
+        data = data.set_index(['permno', 'date'])
 
         # retrieve signal names
         non_signal_cols = ['excess_ret','ret','rf']
-        signal_names = [col for col in signals.columns if col not in non_signal_cols]
+        signal_names = [col for col in data.columns if col not in non_signal_cols]
+        
+        print(data)
 
-        data = signals
     elif(dataset=="oap"):
         '''
         Source: Chen and Zimmermann (2021) "Open Source Cross-Sectional Asset Pricing"
@@ -307,6 +308,20 @@ def outline_data(data, signal_names):
 
     print("\n=== Data Outline ===")
     print(tabulate(outline, headers=['Metric', 'Value'], tablefmt='github', floatfmt='.2f'))
+
+    summary = pd.DataFrame({
+        'min': data.min(),
+        'max': data.max(),
+        'mean': data.mean(),
+        'median': data.median(),
+        'std': data.std(),
+        'non_missing': data.notna().sum(),
+        'missing': data.isna().sum(),
+        'unique': data.nunique()
+    })
+
+    print("\n=== Variable Summary ===")
+    print(tabulate(summary, headers=['Variable', 'min','max','mean','median','std','non-missing','missing','unique'], tablefmt='github', floatfmt='.2f'))
 
 def save_data(IPCAs, dataset, name):
     try:
