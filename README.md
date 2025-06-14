@@ -1,10 +1,13 @@
 # IPCA-asset-pricing
-IPCA application to asset pricing based on Kelly, Pruitt and Su (2018 and 2020). Uses dataset of Gu, Kelly and Xiu (2020).
-
-
+Instrumented Principal Component Analysis (IPCA) application to asset pricing based on Kelly, Pruitt and Su (2019 and 2020). 
 
 ## Installation & Usage
-1. **Download dataset** (Gu, Kelly and Xiu 2020)
+1. **Download dataset**
+    - The implementation features a choice among different datasets.
+        - **fnw**: Freyberger, Neuhierl and Weber (2017), as used by Kelly, Pruitt and Su (2019)
+        - **oap**: Open Asset Pricing by Chen and Zimmermann (2021)
+        - **gkx**: Gu, Kelly and Xiu (2020), based on Green, Hand and Zhang (2016)
+    - Raw data for each dataset must be downloaded or provided under `data/{dataset}`.
     - Download data as provided by Xiu:
     https://dachxiu.chicagobooth.edu/download/datashare.zip
     - Extract and provide data under:
