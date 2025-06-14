@@ -3,23 +3,21 @@ Instrumented Principal Component Analysis (IPCA) application to asset pricing ba
 
 ## Installation & Usage
 1. **Download dataset**
-    - The implementation features a choice among different datasets.
+    - The implementation features a choice among different datasets. Raw data must be downloaded to or provided under `data/{dataset}/`.
         - **fnw**: Freyberger, Neuhierl and Weber (2017), as used by Kelly, Pruitt and Su (2019)
+        [Data Source](https://sethpruitt.net/research/)
         - **oap**: Open Asset Pricing by Chen and Zimmermann (2021)
+        [Data Source](https://www.openassetpricing.com)
         - **gkx**: Gu, Kelly and Xiu (2020), based on Green, Hand and Zhang (2016)
-    - Raw data for each dataset must be downloaded or provided under `data/{dataset}`.
-    - Download data as provided by Xiu:
-    https://dachxiu.chicagobooth.edu/download/datashare.zip
-    - Extract and provide data under:
-    `python/data/gukellyxiu.csv`
+        [Data Source](https://dachxiu.chicagobooth.edu)
 2. **Install requirements** from requirements.txt
     ``` 
     pip install -r /path/to/requirements.txt
     ```
 3. **Run run_ipca.py** to
-    - download data (caveat: requires WRDS credentials)
-    - preprocess data
-    - generate IPCA instances from IPCA.py (caveat: takes time until ALS convergence)
+    - downloads return data (caveat: requires WRDS credentials)
+    - performs data preprocessing
+    - generates IPCA instances from IPCA.py (caveat: takes time until ALS convergence)
     ``` 
     python run_ipca.py
     ```
@@ -31,7 +29,7 @@ Instrumented Principal Component Analysis (IPCA) application to asset pricing ba
     IPCAs[0].visualize_factors()
     IPCAs[0].visualize_gamma()
     ```
-5. **Data** at every step (raw data, preprocessed data and result data) is stored as pickle objects and can be loaded for later use.
+5. **Data** at every step (raw data, preprocessed data and result data) is stored under `data/{dataset}/` as pickle-objects and can be loaded for later use.
     ``` python
     with open('result_data.pkl', 'rb') as inp:
         IPCAs = pickle.load(inp)
