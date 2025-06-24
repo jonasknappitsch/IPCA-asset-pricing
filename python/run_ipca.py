@@ -222,6 +222,7 @@ def download_data(dataset="fnw"):
         
         # set entity-time multi-index
         data = data.set_index(['permno','date'])
+        
     else:
         raise NotImplementedError('Selected dataset is not supported. Please implement first.')
     
@@ -286,6 +287,50 @@ def preprocessing(data, dataset, signal_names):
     
     return(processed_data, signal_names)
 
+def load_observable_factors(gFac_K,R):
+
+    """
+    Downloads observable factors from WRDS Fama-French library for various K specifications.
+    Returns gFac (df(M x T)) for given observable factor specification gFac_K.
+    
+    gFac_K: int, number of factors (1=CAPM, 3=FF3, 4=FFC4, 5=FF5, 6=FFC6)
+    R: dictionary of excess returns with date keys (used to align gFac time index)
+    """
+    import wrds
+    wrds_conn = wrds.Connection()
+
+    # download full factor set from Fama-French
+    ff_all = wrds_conn.raw_sql("""
+        SELECT date, mktrf, smb, hml, umd, rmw, cma
+        FROM ff.fivefactors_monthly
+    """, date_cols=["date"])
+
+    ff_all['date'] = ff_all['date'].apply(lambda d: d.replace(day=28))
+    ff_all.set_index('date', inplace=True)
+
+    ff_all = ff_all.reindex(sorted(R.keys()))  # match with excess returns R index
+
+    if gFac_K == 1:
+        cols = ['mktrf'] # CAPM
+    elif gFac_K == 3:
+        cols = ['mktrf', 'smb', 'hml']  # FF3 (CAPM + smb + hml)
+    elif gFac_K == 4:
+        cols = ['mktrf', 'smb', 'hml', 'umd']  # FFC4 (FF3 + momentum "umd")
+    elif gFac_K == 5:
+        cols = ['mktrf', 'smb', 'hml', 'rmw', 'cma']  # FF5 (FF3 + rmw + cma)
+    elif gFac_K == 6:
+        cols = ['mktrf', 'smb', 'hml', 'rmw', 'cma', 'umd']  # FFC6 (FF5 + momentum "umd")
+    else:
+        raise ValueError(f"Unsupported gFac_K={gFac_K}. Choose from [1,3,4,5,6].")
+
+    gFac = ff_all[cols].T
+    gFac.index = cols  # ensures proper row names
+
+    print("gFac: ", gFac)
+    assert not gFac.isnull().values.any(), "gFac contains NaNs. Check date alignment with R."
+
+    return gFac
+
 def outline_data(data, signal_names):
     summary = {}
 
@@ -336,6 +381,8 @@ def evaluate_IPCAs(IPCAs, dataset, name):
     results = []
     for model in IPCAs:
         K = model.K
+        if(K == 0): # if no latent factor K is specified, use K of gFac instead
+            K = model.gFac.shape[0]
         results.append({
                     "K": K,
                     "R2_Total": round(float(model.r2.get("R_Tot", float("nan"))),4),
@@ -360,7 +407,7 @@ if __name__ == '__main__':
     Data is always stored under 'data/{dataset}'.
     Program will look for previously downloaded 'processed_data.pkl', otherwise download new data.
     '''
-    dataset = input("Choose dataset [ fnw (default) | gkx | oap ]: ").strip() or "fnw"
+    dataset = input("Choose dataset [ fnw (default) | oap | gkx | osb ]: ").strip() or "fnw"
 
     if(os.path.exists(f'data/{dataset}/processed_data.pkl')):
         download_input = input(f"Previous data found for dataset {dataset}. Continue with previous data? [y (default) | n] ") or "y"
@@ -378,6 +425,7 @@ if __name__ == '__main__':
         data, signal_names = download_data(dataset) # load your data here
         data, signal_names = preprocessing(data, dataset, signal_names)
     
+    print(data.dtypes[data.dtypes!="float64"])
     outline_data(data, signal_names)
 
     # construct Z and R as required by ipca (convert pd.Float64 to np.float32, drop date from index)
@@ -386,8 +434,7 @@ if __name__ == '__main__':
     Z = {t: df[signal_names].astype(np.float32).droplevel("date") for t, df in data.groupby("date")}
     R = {t: s["excess_ret"].astype(np.float32).droplevel("date") for t, s in data.groupby("date")}
     
-    # IPCA: no anomaly
-    
+    ##### IPCA: no anomaly #####
     Ks = [1,2,3,4,5,6]
     IPCAs = []
 
@@ -399,7 +446,7 @@ if __name__ == '__main__':
     save_data(IPCAs, dataset, name="no_anomaly")
     evaluate_IPCAs(IPCAs, dataset, name="no_anomaly")
     
-    # IPCA: with anomaly
+    ##### IPCA: with anomaly #####
     Ks = [1,2,3,4,5,6]
     IPCAs = []
 
@@ -413,36 +460,31 @@ if __name__ == '__main__':
     save_data(IPCAs,dataset,name="anomaly")    
     evaluate_IPCAs(IPCAs,dataset,name="anomaly")
     
-    ##### IPCA: with pre-specified factor (PSF) MKT as per CAPM #####
-    '''
+    ##### IPCA: with pre-specified factors (PSF) - instrumented #####
+    
     Ks = []
+    gFac_Ks = [1,3,4,5,6] # define which FF Factor Models to use
     IPCAs = []
 
-    # retrieve MKT from ff.factors_monthly, which is excess return on the market
-    wrds_conn = wrds.Connection()
-    mkt = wrds_conn.raw_sql("""
-        SELECT date, mktrf
-        FROM ff.factors_monthly
-    """, date_cols=["date"])
-
-    # align to date structure (e.g., day=28)
-    # mkt['date'] = mkt['date'] - pd.DateOffset(days=1)
-    mkt['date'] = mkt['date'].apply(lambda d: d.replace(day=28))
-    mkt.set_index('date', inplace=True)
-
-    # define gFac based on CAPM MKT as PSF
-    gFac = mkt.reindex(sorted(R.keys()))  # R is your dictionary of excess returns
-    gFac = gFac.T  # transpose: rows = factor(s), cols = time
-    gFac.index = ['mkt']  # name the factor
-
-    model = IPCA(Z, R=R, gFac=gFac)
-    model.run_ipca(dispIters=True)
+    # change start date as Fama-French Five Factors exist only from 1964, change Z and R correspondingly
+    start_year = 1964 
+    end_year = 2016 # default: 2016
     
-    IPCAs.append(model)
+    data_new = data[
+    (data.index.get_level_values('date').year >= start_year) &
+    (data.index.get_level_values('date').year <= end_year)]
 
-    save_data(IPCAs,dataset,name="PSF_CAPM")    
-    evaluate_IPCAs(IPCAs,dataset,name="PSF_CAPM")
-    '''
+    Z_new = {t: df[signal_names].astype(np.float32).droplevel("date") for t, df in data_new.groupby("date")}
+    R_new = {t: s["excess_ret"].astype(np.float32).droplevel("date") for t, s in data_new.groupby("date")}
+
+    for gFac_K in gFac_Ks:
+        gFac = load_observable_factors(gFac_K, R_new)
+        model = IPCA(Z_new, R=R_new, gFac=gFac)
+        model.run_ipca(dispIters=True)
+        IPCAs.append(model)
+
+    save_data(IPCAs,dataset,name="PSF_instrumented")    
+    evaluate_IPCAs(IPCAs,dataset,name="PSF_instrumented")
 
     """
     # IPCA: no anomaly
