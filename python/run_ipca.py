@@ -222,7 +222,47 @@ def download_data(dataset="fnw"):
         
         # set entity-time multi-index
         data = data.set_index(['permno','date'])
+    elif(dataset=="osb"):
+        '''
+        Source: Dickerson, Nozawa and Robotti (2024) "Factor Investing with Delays"
+        - https://openbondassetpricing.com/machine-learning-data/
+        '''
+        with open(f'data/{dataset}/OSBAP_ML_Panel_Oct_2024.pkl', 'rb') as inp:
+            data = pickle.load(inp)
         
+        # replace _ from predictors for consistency with Dickerson et al. (2024)
+        data.columns = data.columns.str.replace('_', '', regex=False)
+
+        # select 58 factors as per Dickerson et al. 2024
+        signal_names = ["seas25an", "MomSeason06YrPlus", "dVolPut", "seas610an", "dVolCall", "AnnouncementReturn",
+                        "ret31", "TrendFactor", "seas11na", "rmax5rvol21d", "rmax521d", "IndRetBig", "ret10",
+                        "GrAdExp", "empgr1", "AssetGrowth", "colgr1a", "coagr1a", "ppeinvgr1a", "invgr1a",
+                        "noagr1a", "invgr1", "nfnagr1a", "atgr1", "cowcgr1a", "fnlgr1a", "value", "empvalue",
+                        "impliedspread", "mom3mspread", "ratingxspread", "strucvalue", "swapspread", "dts",
+                        "26sprtod2d", "18spread", "yield", "yldtoworst", "25mom6mspread", "bondprice", "EBM",
+                        "eqnetisat", "8nime", "eqnpome", "nime", "eqdur", "turnovervar126d", "corr1260d", "rskew21d",
+                        "iskewcapm21d", "28VaR", "iskewhxz421d", "iskewff321d", "betadown252d", "27volatility",
+                        "CoskewACX", "kurt", "spreadvol"]
+
+        # create excess_ret and permno column as per model definition for consistency
+        # permno is overriden here by bond ID as an exception
+        data["excess_ret"] = data["ensretxrf"]
+        data["permno_backup"] = data["permno"]
+        data["permno"] = data["ID"]
+
+        # set entity-time multi-index
+        data = data.set_index(['permno', 'date'])        
+        
+        # drop metadata and non-needed columns by keeping only signal_names and excess_ret
+        data = data[[col for col in data.columns if col in signal_names or col == "excess_ret"]]
+
+        print(data)
+    elif(dataset=="kpp"):
+        '''
+        Source: Kelly, Palhares and Pruitt (2023) "Modeling Corporate Bond Returns"
+        - https://sethpruitt.net/2020/10/28/modeling-corporate-bond-returns/
+        '''
+        raise NotImplementedError('Selected dataset is not supported. Please implement first.')
     else:
         raise NotImplementedError('Selected dataset is not supported. Please implement first.')
     
