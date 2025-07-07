@@ -4,6 +4,7 @@ import pandas as pd
 import pickle
 from ipca import IPCA
 import wrds # datasets
+import urllib.request
 import matplotlib.pyplot as plt # visualization
 from tabulate import tabulate # print formatted 
 
@@ -88,7 +89,7 @@ def download_data(dataset="fnw"):
             print("Couldn't download openassetpricing data. Please check specification.")
         
         print("Signals: ", signals)
-        # lag to ensure return at t is predicted by signals at t+1, assume signal is available for trading end of month (28th)
+        # lag to ensure return at t is predicted by signals at t-1, assume signal is available for trading end of month (28th)
         lagged_signals = signals.copy()
         lagged_signals["date"] = pd.to_datetime(signals["yyyymm"].astype(str) + "28", format="%Y%m%d") + pd.DateOffset(months=1)
         lagged_signals = lagged_signals.set_index(['permno', 'date'])
@@ -227,9 +228,12 @@ def download_data(dataset="fnw"):
         Source: Dickerson, Nozawa and Robotti (2024) "Factor Investing with Delays"
         - https://openbondassetpricing.com/machine-learning-data/
         '''
+
+        # 341 factor machine learning dataset
+        # https://openbondassetpricing.com/wp-content/uploads/2024/10/OSBAP_ML_Panel_Oct_2024.zip
         with open(f'data/{dataset}/OSBAP_ML_Panel_Oct_2024.pkl', 'rb') as inp:
             data = pickle.load(inp)
-        
+
         # replace _ from predictors for consistency with Dickerson et al. (2024)
         data.columns = data.columns.str.replace('_', '', regex=False)
 
@@ -246,7 +250,7 @@ def download_data(dataset="fnw"):
 
         # create excess_ret and permno column as per model definition for consistency
         # permno is overriden here by bond ID as an exception
-        data["excess_ret"] = data["ensretxrf"]
+        data["excess_ret"] = data["rfretxrf"] # TODO check which ret to use [ensretxrf / rfretxrf / ...]
         data["permno_backup"] = data["permno"]
         data["permno"] = data["ID"]
 
@@ -256,6 +260,9 @@ def download_data(dataset="fnw"):
         # drop metadata and non-needed columns by keeping only signal_names and excess_ret
         data = data[[col for col in data.columns if col in signal_names or col == "excess_ret"]]
 
+        # lag to ensure return at t is predicted by signals at t-1 TODO check if signals are lagged already
+        data[signal_names] = data[signal_names].groupby(level='permno').shift(1)
+        
         print(data)
     elif(dataset=="kpp"):
         '''
