@@ -249,10 +249,9 @@ def download_data(dataset="fnw"):
                         "CoskewACX", "kurt", "spreadvol"]
 
         # create excess_ret and permno column as per model definition for consistency
-        # permno is overriden here by bond ID as an exception
-        data["excess_ret"] = data["rfretxrf"] # TODO check which ret to use [ensretxrf / rfretxrf / ...]
+        data["excess_ret"] = data["ensretxrf"] # could use other return variables [ensretxrf / rfretxrf / ...]
         data["permno_backup"] = data["permno"]
-        data["permno"] = data["ID"]
+        data["permno"] = data["ID"] # permno is overriden here by bond ID as a workaround, to keep permno-column as unique asset identifier
 
         # set entity-time multi-index
         data = data.set_index(['permno', 'date'])        
@@ -266,10 +265,75 @@ def download_data(dataset="fnw"):
         print(data)
     elif(dataset=="kpp"):
         '''
+        INFO: Kelly, Palhares and Pruitt (2023) "Modeling Corporate Bond Returns" uses ICE data which is not publicly available.
+        Instead, public data is used in Kelly and Pruitt (2022) "Reconciling TRACE bond returns", cf dataset "kpbonds".
         Source: Kelly, Palhares and Pruitt (2023) "Modeling Corporate Bond Returns"
         - https://sethpruitt.net/2020/10/28/modeling-corporate-bond-returns/
         '''
         raise NotImplementedError('Selected dataset is not supported. Please implement first.')
+    elif(dataset=="kpbonds"):
+        '''
+        Source: Kelly and Pruitt (2022) "Reconciling TRACE bond returns"
+        - https://sethpruitt.net/2022/03/29/reconciling-trace-bond-returns/
+        '''
+        try:
+            signals = pd.read_csv(f'data/{dataset}/corp_jkp_mergedv2.csv', delimiter=',')
+            print("Signal data loaded successfully.")
+        except FileNotFoundError:
+            print(f"Couldn't find suitable data. Please provide 'data/{dataset}/corp_jkp_mergedv2.csv")
+
+        # set correct dtypes
+        signals["dates"] = pd.to_datetime(signals["dates"].astype(str) + "28", format="%Y%m%d")
+
+        # keep only observations from August 2003 onwards
+        signals = signals[signals["dates"] >= "2003-08-01"]
+        # rename variables for consistency
+        rename_map = {
+            "cusip": "permno", # use cusip as permno-column for model consistency; permno is then used as unique asset identifier (as for stocks)
+            "dates": "date",
+            "nextretexc": "excess_ret" # use nextretexc to predict excess_ret at t+1 by signals at t (lagging)
+        }
+        signals = signals.rename(columns=rename_map)
+
+        # retrieve signal names as per KPP 2023
+        signal_names = [
+            "age",              # 1. Bond age
+            "coupon",           # 2. Coupon
+            "amtout",           # 3. Face value
+            "be_me",            # 4. Book-to-price
+            "debt_ebitda",      # 5. Debt-to-EBITDA
+            "duration",         # 6. Duration
+            "ret_6_1",          # 7. Momentum 6m equity
+            "ni_me",            # 8. Earnings-to-price
+            "me",               # 9. Equity market cap
+            "rvol_21d",         # 10. Equity volatility
+            "totaldebt",        # 11. Firm total debt
+            "mom6",             # 12. Momentum 6m bond
+            "ret_6_1_ind",      # 13. Industry momentum (proxy via industry return)
+            "mom6xrtg",         # 14. Momentum × ratings
+            "at_be",            # 15. Book leverage
+            "market_lev",       # 16. Market leverage
+            "turn_vol",         # 17. Turnover volatility
+            "spread",           # 18. Spread
+            "oper_lvg",         # 19. Operating leverage
+            "gp_at",            # 20. Profitability
+            "chg_gp_at",        # 21. Profitability change
+            "rtg",              # 22. Rating
+            "D2D",              # 23. Distance-to-default
+            "skew",             # 24. Bond skewness
+            "mom6mspread",      # 25. Momentum 6m log(Spread)
+            "spr_to_d2d",       # 26. Spread-to-D2D
+            "volatility",       # 27. Bond volatility
+            "VaR",              # 28. Value-at-Risk
+            "vixbeta"           # 29. VIX beta
+        ]
+
+        # drop metadata and non-needed columns, keeping only signal names and excess returns
+        data = signals[[col for col in signals.columns if col in signal_names or col in ["permno","date","excess_ret"]]]
+
+        # set entity-time multi-index
+        data = data.set_index(['permno', 'date'])
+
     else:
         raise NotImplementedError('Selected dataset is not supported. Please implement first.')
     
@@ -286,8 +350,8 @@ def preprocessing(data, dataset, signal_names):
     print("Preprocessing data...")
 
     # 1. filter by date pursuant to Gu Kelly Xiu 2020 (TODO consider removing observations before 1963/1980, cf. Chen and McCoy 2024)
-    start_year = 1957 # default: 1957
-    end_year = 2016 # default: 2016, TODO could be extended until 2021
+    start_year = 1957 # default: 1962 for fnw, 2003 for kpbonds
+    end_year = 2020 # defaults: 2014 for fnw, 2020 for kpbonds
 
     processed_data = data[
     (data.index.get_level_values('date').year >= start_year) &
@@ -508,7 +572,7 @@ if __name__ == '__main__':
     evaluate_IPCAs(IPCAs,dataset,name="anomaly")
     
     ##### IPCA: with pre-specified factors (PSF) - instrumented #####
-    
+    '''
     Ks = []
     gFac_Ks = [1,3,4,5,6] # define which FF Factor Models to use
     IPCAs = []
@@ -532,7 +596,8 @@ if __name__ == '__main__':
 
     save_data(IPCAs,dataset,name="PSF_instrumented")    
     evaluate_IPCAs(IPCAs,dataset,name="PSF_instrumented")
-
+    '''
+    
     """
     # IPCA: no anomaly
     IPCAs[0].r2
