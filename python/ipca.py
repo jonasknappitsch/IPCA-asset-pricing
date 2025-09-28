@@ -281,7 +281,7 @@ class IPCA(object):
 
     def visualize_factors(self, save_path=None):
         '''
-        Plots time-series of all latent factors
+        Plots time-series of all latent factor return estimates
 
         [Inputs]
         save_path (string): if given, stores the plot instead of showing it
