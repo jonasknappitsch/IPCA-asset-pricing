@@ -1,49 +1,67 @@
 # IPCA-asset-pricing
-Instrumented Principal Component Analysis (IPCA) application to asset pricing based on Kelly, Pruitt and Su (2019 and 2020). 
+Instrumented Principal Component Analysis (IPCA) application to asset pricing based on Kelly, Pruitt and Su (2019 and 2020) to model stock and bond returns.
 
-## Installation & Usage
-1. **Download dataset**
+
+## Usage
+1. **Download datasets** for stock and bond returns
     - The implementation features a choice among different datasets. Raw data must be downloaded to or provided under `data/{dataset}/`.
-        - **fnw**: Freyberger, Neuhierl and Weber (2017), as used by Kelly, Pruitt and Su (2019)
-        [Data Source](https://sethpruitt.net/research/)
-        - **oap**: Open Asset Pricing by Chen and Zimmermann (2021)
-        [Data Source](https://www.openassetpricing.com)
-        - **gkx**: Gu, Kelly and Xiu (2020), based on Green, Hand and Zhang (2016)
-        [Data Source](https://dachxiu.chicagobooth.edu)
+        - **fnw**: Freyberger, Neuhierl and Weber "Dissecting Characteristics Nonparametrically" (2017), as used by Kelly, Pruitt and Su (2019) "Characteristics are Covariances"
+        [Data Source](https://sethpruitt.net/2019/12/01/characteristics-are-covariances/)
+        - **kpbonds**: Kelly and Pruitt (2022) "Reconciling TRACE bond returns" [Data Source](https://sethpruitt.net/2022/03/29/reconciling-trace-bond-returns/)
+
 2. **Install requirements** from requirements.txt
     ``` 
-    pip install -r /path/to/requirements.txt
+    pip install -r requirements.txt
     ```
-3. **Run run_ipca.py** to
-    - downloads return data (caveat: requires WRDS credentials)
-    - performs data preprocessing
-    - generates IPCA instances from IPCA.py (caveat: takes time until ALS convergence)
-    ``` 
-    python run_ipca.py
-    ```
-4. **Test IPCA results** (example usage)
+3. **Run script.py** step by step to get
+    - IPCA Application to Stocks
+    - IPCA Application to Bonds
+    - Common Factor Structure
     ``` python
-    print(IPCAs[0].r2)
-    print(IPCAs[0].Gamma)
-    print(IPCAs[0].Fac)
-    IPCAs[0].visualize_factors()
-    IPCAs[0].visualize_gamma()
+    python script.py
     ```
-5. **Data** at every step (raw data, preprocessed data and result data) is stored under `data/{dataset}/` as pickle-objects and can be loaded for later use.
+4. **Test IPCA model results** (example usage)
     ``` python
-    with open('result_data.pkl', 'rb') as inp:
-        IPCAs = pickle.load(inp)
+    model.r2 # R2 on Asset (Rr2) and Managed-Portfolio Level (Rx2)
+
+    model.Gamma # Loadings
+
+    model.Fac # Factor Returns
+
+    model.visualize_factors() # Loadings Visualized
+
+    model.visualize_gamma_heatmap() # Factor Returns Visualized
+
+    model_bonds.Fac.T.mean() # Factor Expected Returns (monthly)
+
+    (model_bonds.Fac.T.mean()/model_bonds.Fac.T.std()) * (12**0.5) # Factor Sharpe Ratios (annualized)
     ```
 
 (c) Jonas Knappitsch at Vienna University of Economics and Business (2025)
 
-## Sample Results
+## Results
+
+### IPCA Results for Stocks
 ``` python
-IPCAs[4].visualize_factors()
+model_stocks.visualize_factors()
 ```
-![Factors](python/img/IPCA_K5_Factors.png "IPCA Latent Factors")
+![Factors](python/results/fnw/results_no_anomaly_factors_K5.png "IPCA Latent Factor Returns")
 
 ``` python
-IPCAs[4].visualize_gamma()
+model_stocks.visualize_gamma_heatmap()
 ```
-![Gammas](python/img/IPCA_K5_Gammas.png "IPCA Gamma Loadings")
+![Gammas](python/results/fnw/results_no_anomaly_gamma_heatmap_K5.png "IPCA Gamma Loadings")
+
+### IPCA Results for Bonds
+``` python
+model_bonds.visualize_factors()
+```
+![Factors](python/results/kpbonds/results_no_anomaly_factors_K5.png "IPCA Latent Factor Returns")
+
+``` python
+model_bonds.visualize_gamma_heatmap()
+```
+![Gammas](python/results/kpbonds/results_no_anomaly_gamma_heatmap_K5.png "IPCA Gamma Loadings")
+
+### Common Factor Structure
+![Correlation](python/results/common/ipca_correlations_stock_bond.png "IPCA Correlation Stocks and Bonds")
