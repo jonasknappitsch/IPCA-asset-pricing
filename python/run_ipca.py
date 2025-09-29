@@ -2,9 +2,9 @@ import os
 import numpy as np
 import pandas as pd
 import pickle
+import requests
 from ipca import IPCA
 import wrds # datasets
-import urllib.request
 import matplotlib.pyplot as plt # visualization
 from tabulate import tabulate # print formatted 
 
@@ -15,8 +15,18 @@ def download_data(dataset="fnw"):
         As used in: Kelly, Pruitt and Su (2019) "Characteristics are Covariances"
         Provided by:
         - https://sethpruitt.net/
-        - https://sethpruitt.net/research/
+        - http://dropbox.com/scl/fo/309bktmb7pc6oihtn1cpe/ANxVbKAJ2J5VN0HyhkusWSo/characteristics_data_feb2017.csv?rlkey=rg99gls2dr8q4got2bq00cdyx&e=1&dl=1
         '''
+
+        # download dataset if not exists
+        if not os.path.isfile(f'data/{dataset}/fnw.csv'):
+            print(f"Dataset {dataset} not found locally. Downloading dataset...")
+            source = "http://dropbox.com/scl/fo/309bktmb7pc6oihtn1cpe/ANxVbKAJ2J5VN0HyhkusWSo/characteristics_data_feb2017.csv?rlkey=rg99gls2dr8q4got2bq00cdyx&e=1&dl=1"
+            response = requests.get(source)
+            response.raise_for_status()  # raise error if download fails
+            with open(f'data/{dataset}/fnw.csv', "wb") as f:
+                f.write(response.content)
+            print("Download complete.")
 
         try:
             signals = pd.read_csv(f'data/{dataset}/fnw.csv', delimiter=',')
@@ -72,7 +82,72 @@ def download_data(dataset="fnw"):
         signal_names = [col for col in data.columns if col not in non_signal_cols]
         
         print(data)
+    
+    elif(dataset=="kpbonds"):
+        '''
+        Source: Kelly and Pruitt (2022) "Reconciling TRACE bond returns"
+        - https://sethpruitt.net/2022/03/29/reconciling-trace-bond-returns/
+        - https://www.dropbox.com/scl/fo/0na6wktek6ydredni1697/APpJBFtYGIrQt_rds6vbk1w?dl=1
+        '''
+        try:
+            signals = pd.read_csv(f'data/{dataset}/corp_jkp_mergedv2.csv', delimiter=',')
+            print("Signal data loaded successfully.")
+        except FileNotFoundError:
+            print(f"Couldn't find suitable data. Please provide 'data/{dataset}/corp_jkp_mergedv2.csv")
 
+        # set correct dtypes
+        signals["dates"] = pd.to_datetime(signals["dates"].astype(str) + "28", format="%Y%m%d")
+
+        # keep only observations from August 2003 onwards as per Kelly and Pruitt (2022)
+        signals = signals[signals["dates"] >= "2003-08-01"]
+
+        # rename variables for consistency
+        rename_map = {
+            "cusip": "permno", # use cusip as permno-column for model consistency; permno is then used as unique asset identifier (as for stocks)
+            "dates": "date",
+            "nextretexc": "excess_ret" # use nextretexc to predict excess_ret at t+1 by signals at t (lagging)
+        }
+        signals = signals.rename(columns=rename_map)
+
+        # retrieve signal names as per KPP 2023
+        signal_names = [
+            "age",              # 1. Bond age
+            "coupon",           # 2. Coupon
+            "amtout",           # 3. Face value
+            "be_me",            # 4. Book-to-price
+            "debt_ebitda",      # 5. Debt-to-EBITDA
+            "duration",         # 6. Duration
+            "ret_6_1",          # 7. Momentum 6m equity
+            "ni_me",            # 8. Earnings-to-price
+            "me",               # 9. Equity market cap
+            "rvol_21d",         # 10. Equity volatility
+            "totaldebt",        # 11. Firm total debt
+            "mom6",             # 12. Momentum 6m bond
+            "ret_6_1_ind",      # 13. Industry momentum (proxy via industry return)
+            "mom6xrtg",         # 14. Momentum × ratings
+            "at_be",            # 15. Book leverage
+            "market_lev",       # 16. Market leverage
+            "turn_vol",         # 17. Turnover volatility
+            "spread",           # 18. Spread
+            "oper_lvg",         # 19. Operating leverage
+            "gp_at",            # 20. Profitability
+            "chg_gp_at",        # 21. Profitability change
+            "rtg",              # 22. Rating
+            "D2D",              # 23. Distance-to-default
+            "skew",             # 24. Bond skewness
+            "mom6mspread",      # 25. Momentum 6m log(Spread)
+            "spr_to_d2d",       # 26. Spread-to-D2D
+            "volatility",       # 27. Bond volatility
+            "VaR",              # 28. Value-at-Risk
+            "vixbeta"           # 29. VIX beta
+        ]
+
+        # drop metadata and non-needed columns, keeping only signal names and excess returns
+        data = signals[[col for col in signals.columns if col in signal_names or col in ["permno","date","excess_ret"]]]
+
+        # set entity-time multi-index
+        data = data.set_index(['permno', 'date'])
+    
     elif(dataset=="oap"):
         '''
         Source: Chen and Zimmermann (2021) "Open Source Cross-Sectional Asset Pricing"
@@ -118,7 +193,7 @@ def download_data(dataset="fnw"):
         # change crsp date day to 28th to allow join
         crsp['date'] = crsp['date'].apply(lambda d: d.replace(day=28))
 
-        # change crsp permno dtype to int32 for memory alignment # TODO harmonize memory conversions
+        # change crsp permno dtype to int32 for memory alignment
         crsp['permno'] = crsp['permno'].astype('int32')
 
         # download Fama-French risk-free rate for excess returns
@@ -170,7 +245,7 @@ def download_data(dataset="fnw"):
         if use_frequency_lag:
             # advanced lag based on signal frequency
             characteristics_table = pd.read_csv(f'data/{dataset}/characteristics_table_gkx.csv', delimiter=',')
-            lag_frequency = {'Monthly': 1, 'Quarterly': 4, 'Annual': 6} # TODO check 1,4,6 (pref) or 1,5,7
+            lag_frequency = {'Monthly': 1, 'Quarterly': 4, 'Annual': 6}
             lag_map = characteristics_table.set_index('Acronym')['Frequency'].map(lag_frequency).to_dict() # lag map as per Gu Kelly Xiu (2020)
             
             lagged_signals = pd.DataFrame(index=signals.index)
@@ -223,116 +298,6 @@ def download_data(dataset="fnw"):
         
         # set entity-time multi-index
         data = data.set_index(['permno','date'])
-    elif(dataset=="osb"):
-        '''
-        Source: Dickerson, Nozawa and Robotti (2024) "Factor Investing with Delays"
-        - https://openbondassetpricing.com/machine-learning-data/
-        '''
-
-        # 341 factor machine learning dataset
-        # https://openbondassetpricing.com/wp-content/uploads/2024/10/OSBAP_ML_Panel_Oct_2024.zip
-        with open(f'data/{dataset}/OSBAP_ML_Panel_Oct_2024.pkl', 'rb') as inp:
-            data = pickle.load(inp)
-
-        # replace _ from predictors for consistency with Dickerson et al. (2024)
-        data.columns = data.columns.str.replace('_', '', regex=False)
-
-        # select 58 factors as per Dickerson et al. 2024
-        signal_names = ["seas25an", "MomSeason06YrPlus", "dVolPut", "seas610an", "dVolCall", "AnnouncementReturn",
-                        "ret31", "TrendFactor", "seas11na", "rmax5rvol21d", "rmax521d", "IndRetBig", "ret10",
-                        "GrAdExp", "empgr1", "AssetGrowth", "colgr1a", "coagr1a", "ppeinvgr1a", "invgr1a",
-                        "noagr1a", "invgr1", "nfnagr1a", "atgr1", "cowcgr1a", "fnlgr1a", "value", "empvalue",
-                        "impliedspread", "mom3mspread", "ratingxspread", "strucvalue", "swapspread", "dts",
-                        "26sprtod2d", "18spread", "yield", "yldtoworst", "25mom6mspread", "bondprice", "EBM",
-                        "eqnetisat", "8nime", "eqnpome", "nime", "eqdur", "turnovervar126d", "corr1260d", "rskew21d",
-                        "iskewcapm21d", "28VaR", "iskewhxz421d", "iskewff321d", "betadown252d", "27volatility",
-                        "CoskewACX", "kurt", "spreadvol"]
-
-        # create excess_ret and permno column as per model definition for consistency
-        data["excess_ret"] = data["ensretxrf"] # could use other return variables [ensretxrf / rfretxrf / ...]
-        data["permno_backup"] = data["permno"]
-        data["permno"] = data["ID"] # permno is overriden here by bond ID as a workaround, to keep permno-column as unique asset identifier
-
-        # set entity-time multi-index
-        data = data.set_index(['permno', 'date'])        
-        
-        # drop metadata and non-needed columns by keeping only signal_names and excess_ret
-        data = data[[col for col in data.columns if col in signal_names or col == "excess_ret"]]
-
-        # lag to ensure return at t is predicted by signals at t-1 TODO check if signals are lagged already
-        data[signal_names] = data[signal_names].groupby(level='permno').shift(1)
-        
-        print(data)
-    elif(dataset=="kpp"):
-        '''
-        INFO: Kelly, Palhares and Pruitt (2023) "Modeling Corporate Bond Returns" uses ICE data which is not publicly available.
-        Instead, public data is used in Kelly and Pruitt (2022) "Reconciling TRACE bond returns", cf dataset "kpbonds".
-        Source: Kelly, Palhares and Pruitt (2023) "Modeling Corporate Bond Returns"
-        - https://sethpruitt.net/2020/10/28/modeling-corporate-bond-returns/
-        '''
-        raise NotImplementedError('Selected dataset is not supported. Please implement first.')
-    elif(dataset=="kpbonds"):
-        '''
-        Source: Kelly and Pruitt (2022) "Reconciling TRACE bond returns"
-        - https://sethpruitt.net/2022/03/29/reconciling-trace-bond-returns/
-        '''
-        try:
-            signals = pd.read_csv(f'data/{dataset}/corp_jkp_mergedv2.csv', delimiter=',')
-            print("Signal data loaded successfully.")
-        except FileNotFoundError:
-            print(f"Couldn't find suitable data. Please provide 'data/{dataset}/corp_jkp_mergedv2.csv")
-
-        # set correct dtypes
-        signals["dates"] = pd.to_datetime(signals["dates"].astype(str) + "28", format="%Y%m%d")
-
-        # keep only observations from August 2003 onwards
-        signals = signals[signals["dates"] >= "2003-08-01"]
-        # rename variables for consistency
-        rename_map = {
-            "cusip": "permno", # use cusip as permno-column for model consistency; permno is then used as unique asset identifier (as for stocks)
-            "dates": "date",
-            "nextretexc": "excess_ret" # use nextretexc to predict excess_ret at t+1 by signals at t (lagging)
-        }
-        signals = signals.rename(columns=rename_map)
-
-        # retrieve signal names as per KPP 2023
-        signal_names = [
-            "age",              # 1. Bond age
-            "coupon",           # 2. Coupon
-            "amtout",           # 3. Face value
-            "be_me",            # 4. Book-to-price
-            "debt_ebitda",      # 5. Debt-to-EBITDA
-            "duration",         # 6. Duration
-            "ret_6_1",          # 7. Momentum 6m equity
-            "ni_me",            # 8. Earnings-to-price
-            "me",               # 9. Equity market cap
-            "rvol_21d",         # 10. Equity volatility
-            "totaldebt",        # 11. Firm total debt
-            "mom6",             # 12. Momentum 6m bond
-            "ret_6_1_ind",      # 13. Industry momentum (proxy via industry return)
-            "mom6xrtg",         # 14. Momentum × ratings
-            "at_be",            # 15. Book leverage
-            "market_lev",       # 16. Market leverage
-            "turn_vol",         # 17. Turnover volatility
-            "spread",           # 18. Spread
-            "oper_lvg",         # 19. Operating leverage
-            "gp_at",            # 20. Profitability
-            "chg_gp_at",        # 21. Profitability change
-            "rtg",              # 22. Rating
-            "D2D",              # 23. Distance-to-default
-            "skew",             # 24. Bond skewness
-            "mom6mspread",      # 25. Momentum 6m log(Spread)
-            "spr_to_d2d",       # 26. Spread-to-D2D
-            "volatility",       # 27. Bond volatility
-            "VaR",              # 28. Value-at-Risk
-            "vixbeta"           # 29. VIX beta
-        ]
-
-        # drop metadata and non-needed columns, keeping only signal names and excess returns
-        data = signals[[col for col in signals.columns if col in signal_names or col in ["permno","date","excess_ret"]]]
-
-        # set entity-time multi-index
-        data = data.set_index(['permno', 'date'])
 
     else:
         raise NotImplementedError('Selected dataset is not supported. Please implement first.')
@@ -349,38 +314,25 @@ def download_data(dataset="fnw"):
 def preprocessing(data, dataset, signal_names):
     print("Preprocessing data...")
 
-    # 1. filter by date pursuant to Gu Kelly Xiu 2020 (TODO consider removing observations before 1963/1980, cf. Chen and McCoy 2024)
-    start_year = 1957 # default: 1962 for fnw, 2003 for kpbonds
-    end_year = 2020 # defaults: 2014 for fnw, 2020 for kpbonds
+    # 1. filter by date
+    start_year = 1962 # default: 1962 for fnw, 2003 for kpbonds
+    end_year = 2014 # defaults: 2014 for fnw, 2020 for kpbonds
 
     processed_data = data[
     (data.index.get_level_values('date').year >= start_year) &
     (data.index.get_level_values('date').year <= end_year)]
 
-    # 2. remove rows where return is null # TODO check if this is desired, or eg linear interpolation
+    # 2. remove rows where return is null
     processed_data = processed_data[processed_data['excess_ret'].notnull()]
     
     # 3. remove rows where all signals are missing (e.g. due to lagging)
     processed_data = processed_data.dropna(subset=signal_names, how='all')
     
     # 4. standardize by performing rank-normalization among non-missing (caveat) observations
-    
     for col in signal_names:
         processed_data[col] = processed_data.groupby(level='date')[col].transform(
             lambda x: ((x.rank(method='average', na_option='keep') - 1) / (x.count() - 1)) - 0.5
         )
-    
-    '''for col in signal_names:
-        # rank characteristics cross-sectionally by date while ignoring NAs
-        ranks = processed_data[col].groupby(level='date').transform(
-            lambda x: x.rank(method='average', na_option='keep')
-        )
-        # get # of non-missing observations per date
-        counts = processed_data[col].groupby(level='date').transform(
-            lambda x: x.notnull().sum()
-        )
-        # map into [-0.5, 0.5] interval among non-missing observations
-        processed_data[col] = (ranks / counts) - 0.5'''
         
     # 5. impute missing values with median, which equals 0 after standardization
     processed_data[signal_names] = processed_data[signal_names].fillna(0)
@@ -399,7 +351,6 @@ def preprocessing(data, dataset, signal_names):
     return(processed_data, signal_names)
 
 def load_observable_factors(gFac_K,R):
-
     """
     Downloads observable factors from WRDS Fama-French library for various K specifications.
     Returns gFac (df(M x T)) for given observable factor specification gFac_K.
@@ -513,12 +464,11 @@ def evaluate_IPCAs(IPCAs, dataset, name):
     print(tabulate(df, headers="keys", tablefmt="github", showindex=False))
 
 if __name__ == '__main__':
-    
     '''
     Data is always stored under 'data/{dataset}'.
     Program will look for previously downloaded 'processed_data.pkl', otherwise download new data.
     '''
-    dataset = input("Choose dataset [ fnw (default) | oap | gkx | osb ]: ").strip() or "fnw"
+    dataset = input("Choose dataset [ fnw (default) | kpbonds | gkx | oap ]: ").strip() or "fnw"
 
     if(os.path.exists(f'data/{dataset}/processed_data.pkl')):
         download_input = input(f"Previous data found for dataset {dataset}. Continue with previous data? [y (default) | n] ") or "y"
@@ -526,7 +476,7 @@ if __name__ == '__main__':
             with open(f'data/{dataset}/processed_data.pkl', 'rb') as inp:
                 data = pickle.load(inp)
             print(f"Using previous processed data from data/{dataset}/processed_data.pkl.")
-            signal_names = [col for col in data.columns if col not in ["permno", "date","signals_date","ret","rf","excess_ret","sic2"]] # TODO find more dynamic solution
+            signal_names = [col for col in data.columns if col not in ["permno", "date","signals_date","ret","rf","excess_ret","sic2"]]
         else:
             print(f"Downloading new data for dataset {dataset}.")
             data, signal_names = download_data(dataset) # load your data here
@@ -540,8 +490,6 @@ if __name__ == '__main__':
     outline_data(data, signal_names)
 
     # construct Z and R as required by ipca (convert pd.Float64 to np.float32, drop date from index)
-    # TODO check whether np.float32 conversion makes sense earlier. conversion is necessary
-    # as otherwise characteristics happen to become pd.Float64 at some point
     Z = {t: df[signal_names].astype(np.float32).droplevel("date") for t, df in data.groupby("date")}
     R = {t: s["excess_ret"].astype(np.float32).droplevel("date") for t, s in data.groupby("date")}
     
@@ -597,25 +545,3 @@ if __name__ == '__main__':
     save_data(IPCAs,dataset,name="PSF_instrumented")    
     evaluate_IPCAs(IPCAs,dataset,name="PSF_instrumented")
     '''
-    
-    """
-    # IPCA: no anomaly
-    IPCAs[0].r2
-    IPCAs[0].Gamma
-    IPCAs[0].Fac
-    IPCAs[0].visualize_factors()
-    IPCAs[0].visualize_gamma_heatmap()   
-
-    # IPCA: with anomaly
-    gFac = pd.DataFrame(1., index=sorted(R.keys()), columns=['anomaly']).T
-    ipca_1 = IPCA(Z, R=R, K=K, gFac=gFac)
-    ipca_1.run_ipca(dispIters=True)
-
-    # IPCA: with anomaly and a pre-specified factor
-    gFac = pd.DataFrame(1., index=sorted(R.keys()), columns=['anomaly'])
-    gFac['mkt'] = pd.Series({key:R[key].mean() for key in gFac.index}) # say we include the equally weighted market
-    gFac = gFac.T
-    ipca_2 = IPCA(Z, R=R, K=K, gFac=gFac)
-    ipca_2.run_ipca(dispIters=True)
-    """
-    
