@@ -7,8 +7,6 @@ from ipca import IPCA
 import wrds # datasets
 import matplotlib.pyplot as plt # visualization
 import seaborn as sns # visualization
-from tabulate import tabulate # print formatted 
-
 
 ######################################
 #####       PREREQUISITES        #####
