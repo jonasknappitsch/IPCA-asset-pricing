@@ -46,23 +46,23 @@ The results as covered by the underlying Thesis are provided under `results/` an
 ``` python
 model_stocks.visualize_factors()
 ```
-![Factors](python/results/fnw/results_no_anomaly_factors_K5.png "IPCA Latent Factor Returns")
+![Factors](results/fnw/results_no_anomaly_factors_K5.png "IPCA Latent Factor Returns")
 
 ``` python
 model_stocks.visualize_gamma_heatmap()
 ```
-![Gammas](python/results/fnw/results_no_anomaly_gamma_heatmap_K5.png "IPCA Gamma Loadings")
+![Gammas](results/fnw/results_no_anomaly_gamma_heatmap_K5.png "IPCA Gamma Loadings")
 
 ### IPCA Results for Bonds
 ``` python
 model_bonds.visualize_factors()
 ```
-![Factors](python/results/kpbonds/results_no_anomaly_factors_K5.png "IPCA Latent Factor Returns")
+![Factors](results/kpbonds/results_no_anomaly_factors_K5.png "IPCA Latent Factor Returns")
 
 ``` python
 model_bonds.visualize_gamma_heatmap()
 ```
-![Gammas](python/results/kpbonds/results_no_anomaly_gamma_heatmap_K5.png "IPCA Gamma Loadings")
+![Gammas](results/kpbonds/results_no_anomaly_gamma_heatmap_K5.png "IPCA Gamma Loadings")
 
 ### Common Factor Structure
-![Correlation](python/results/common/ipca_correlations_stock_bond.png "IPCA Correlation Stocks and Bonds")
+![Correlation](results/common/ipca_correlations_stock_bond.png "IPCA Correlation Stocks and Bonds")
