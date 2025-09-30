@@ -48,7 +48,7 @@ download link http://dropbox.com/scl/fo/309bktmb7pc6oihtn1cpe/ANxVbKAJ2J5VN0Hyhk
 # download dataset if not exists
 dataset="fnw"
 if not os.path.isfile(f'data/{dataset}/characteristics_data_feb2017.csv'):
-    print("Dataset not found locally. Downloading dataset...")
+    print("Dataset not found locally. Downloading dataset (approx. 750 MB) ...")
     source = "http://dropbox.com/scl/fo/309bktmb7pc6oihtn1cpe/ANxVbKAJ2J5VN0HyhkusWSo/characteristics_data_feb2017.csv?rlkey=rg99gls2dr8q4got2bq00cdyx&e=1&dl=1"
     response = requests.get(source)
     response.raise_for_status()  # raise error if download fails
@@ -146,8 +146,8 @@ model_stocks.run_ipca(dispIters=True)
 print("R2: ", model_stocks.r2)
 model_stocks.visualize_factors()
 model_stocks.visualize_gamma_heatmap()
-print("Factor Expected Returns (monthly): ",model_stocks.Fac.T.mean())
-print("Factor Sharpe Ratios (annualized): ", (model_stocks.Fac.T.mean()/model_stocks.Fac.T.std()) * (12**0.5))
+print("Factor Expected Returns (monthly) \n: ",model_stocks.Fac.T.mean())
+print("Factor Sharpe Ratios (annualized): \n", (model_stocks.Fac.T.mean()/model_stocks.Fac.T.std()) * (12**0.5))
 
 # IPCA K=5 With Anomalies
 K = 5
@@ -158,8 +158,8 @@ model_stocks_unrestricted.run_ipca(dispIters=True)
 print("R2: ", model_stocks_unrestricted.r2)
 model_stocks_unrestricted.visualize_factors()
 model_stocks_unrestricted.visualize_gamma_heatmap()
-print("Factor Expected Returns (monthly): ",model_stocks_unrestricted.Fac.T.mean())
-print("Factor Sharpe Ratios (annualized): ", (model_stocks_unrestricted.Fac.T.mean()/model_stocks_unrestricted.Fac.T.std()) * (12**0.5))
+print("Factor Expected Returns (monthly) \n: ",model_stocks_unrestricted.Fac.T.mean())
+print("Factor Sharpe Ratios (annualized): \n", (model_stocks_unrestricted.Fac.T.mean()/model_stocks_unrestricted.Fac.T.std()) * (12**0.5))
 
 ##### Instrumenting Traditional Factor Models With IPCA Pre-Specified Factors (PSF) #####
 
@@ -241,7 +241,7 @@ download link https://www.dropbox.com/scl/fo/0na6wktek6ydredni1697/APpJBFtYGIrQt
 # download dataset if not exists
 dataset="kpbonds"
 if not os.path.isfile(f'data/{dataset}/corp_jkp_mergedv2.csv'):
-    print("Dataset not found locally. Downloading dataset...")
+    print("Dataset not found locally. Downloading dataset (approx. 350 MB) ...")
     source = "https://www.dropbox.com/scl/fi/np6omyvdct7ezt288qgjv/corp_jkp_mergedv2.csv?rlkey=g0429wg9r1dap5u33z3w2326y&st=g7i6ec7h&dl=1"
     response = requests.get(source)
     response.raise_for_status()  # raise error if download fails
@@ -347,8 +347,8 @@ model_bonds.run_ipca(dispIters=True)
 print("R2: ", model_bonds.r2)
 model_bonds.visualize_factors()
 model_bonds.visualize_gamma_heatmap()
-print("Factor Expected Returns (monthly): ",model_bonds.Fac.T.mean())
-print("Factor Sharpe Ratios (annualized): ", (model_bonds.Fac.T.mean()/model_bonds.Fac.T.std()) * (12**0.5))
+print("Factor Expected Returns (monthly) \n: ",model_bonds.Fac.T.mean())
+print("Factor Sharpe Ratios (annualized): \n", (model_bonds.Fac.T.mean()/model_bonds.Fac.T.std()) * (12**0.5))
 
 # IPCA K=5 With Anomalies
 K = 5
@@ -359,8 +359,8 @@ model_bonds_unrestricted.run_ipca(dispIters=True)
 print("R2: ", model_bonds_unrestricted.r2)
 model_bonds_unrestricted.visualize_factors()
 model_bonds_unrestricted.visualize_gamma_heatmap()
-print("Factor Expected Returns (monthly): ",model_bonds_unrestricted.Fac.T.mean())
-print("Factor Sharpe Ratios (annualized): ", (model_bonds_unrestricted.Fac.T.mean()/model_bonds_unrestricted.Fac.T.std()) * (12**0.5))
+print("Factor Expected Returns (monthly) \n: ",model_bonds_unrestricted.Fac.T.mean())
+print("Factor Sharpe Ratios (annualized): \n", (model_bonds_unrestricted.Fac.T.mean()/model_bonds_unrestricted.Fac.T.std()) * (12**0.5))
 
 ######################################
 #####  Common Factor Structure  #####
