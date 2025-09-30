@@ -1,26 +1,25 @@
 # IPCA-asset-pricing
 Instrumented Principal Component Analysis (IPCA) application to asset pricing based on Kelly, Pruitt and Su (2019 and 2020) to model stock and bond returns.
 
-
 ## Usage
-1. **Download datasets** for stock and bond returns
-    - The implementation features a choice among different datasets. Raw data must be downloaded to or provided under `data/{dataset}/`.
-        - **fnw**: Freyberger, Neuhierl and Weber "Dissecting Characteristics Nonparametrically" (2017), as used by Kelly, Pruitt and Su (2019) "Characteristics are Covariances"
-        [Data Source](https://sethpruitt.net/2019/12/01/characteristics-are-covariances/)
-        - **kpbonds**: Kelly and Pruitt (2022) "Reconciling TRACE bond returns" [Data Source](https://sethpruitt.net/2022/03/29/reconciling-trace-bond-returns/)
-
-2. **Install requirements** from requirements.txt
+1. **Install requirements** from requirements.txt
     ``` 
     pip install -r requirements.txt
     ```
-3. **Run script.py** step by step to get
-    - IPCA Application to Stocks
-    - IPCA Application to Bonds
-    - Common Factor Structure
+2. **Run script.py** 
+    - The script attempts to download the required datasets automatically from their sources. In case if issues, download manually and provide under `data/{dataset}/`.
+        - **fnw**: Freyberger, Neuhierl and Weber "Dissecting Characteristics Nonparametrically" (2017), as used by Kelly, Pruitt and Su (2019) "Characteristics are Covariances"
+        [Data Source](https://sethpruitt.net/2019/12/01/characteristics-are-covariances/)
+        - **kpbonds**: Kelly and Pruitt (2022) "Reconciling TRACE bond returns" [Data Source](https://sethpruitt.net/2022/03/29/reconciling-trace-bond-returns/)
+    - The execution then proceeds in the following order:
+        - IPCA Application to Stocks
+        - IPCA Application to Bonds
+        - Common Factor Structure
+    - The script can be executed fully at once or step by step.
     ``` python
     python script.py
     ```
-4. **Test IPCA model results** (example usage)
+3. **Test IPCA model results** (example usage)
     ``` python
     model.r2 # R2 on Asset (Rr2) and Managed-Portfolio Level (Rx2)
 
@@ -40,6 +39,7 @@ Instrumented Principal Component Analysis (IPCA) application to asset pricing ba
 (c) Jonas Knappitsch at Vienna University of Economics and Business (2025)
 
 ## Results
+The results as covered by the underlying Thesis are provided under `results/` and illustrated in the following.
 
 ### IPCA Results for Stocks
 ``` python
