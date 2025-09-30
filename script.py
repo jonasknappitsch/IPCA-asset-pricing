@@ -1,8 +1,8 @@
 import os
 import numpy as np
 import pandas as pd
-import pickle
 import requests
+import logging
 from ipca import IPCA
 import wrds # datasets
 import matplotlib.pyplot as plt # visualization
@@ -32,6 +32,9 @@ download link https://www.dropbox.com/scl/fo/0na6wktek6ydredni1697/APpJBFtYGIrQt
 ######################################
 ##### IPCA Application to Stocks #####
 ######################################
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.info("##### IPCA Application to Stocks #####")
 
 ##### Download Data #####
 
@@ -225,6 +228,8 @@ IPCAs[4].visualize_gamma_heatmap()
 ##### IPCA Application to Bonds #####
 ######################################
 
+logging.info("##### IPCA Application to Bonds #####")
+
 ##### Download Data #####
 
 """
@@ -360,6 +365,8 @@ print("Factor Sharpe Ratios (annualized): ", (model_bonds_unrestricted.Fac.T.mea
 ######################################
 #####  Common Factor Structure  #####
 ######################################
+
+logging.info("##### Common Factor Structure #####")
 
 ##### find cross-asset-class correlation matrix
 
