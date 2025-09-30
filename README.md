@@ -1,5 +1,5 @@
 # IPCA-asset-pricing
-Instrumented Principal Component Analysis (IPCA) application to asset pricing based on Kelly, Pruitt and Su (2019 and 2020) to model stock and bond returns.
+Instrumented Principal Component Analysis (IPCA) application to asset pricing based on Kelly, Pruitt and Su (2017 and 2019) to model stock and bond returns.
 
 ## Usage
 1. **Install requirements** from requirements.txt
