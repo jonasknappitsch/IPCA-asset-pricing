@@ -6,7 +6,7 @@ Instrumented Principal Component Analysis (IPCA) application to asset pricing ba
     ``` 
     pip install -r requirements.txt
     ```
-2. **Run script.py** 
+2. **Run main.py** 
     - The script attempts to download the required datasets automatically from their sources. In case if issues, download manually and provide under `data/{dataset}/`.
         - **fnw**: Freyberger, Neuhierl and Weber "Dissecting Characteristics Nonparametrically" (2017), as used by Kelly, Pruitt and Su (2019) "Characteristics are Covariances"
         [Data Source](https://sethpruitt.net/2019/12/01/characteristics-are-covariances/)
@@ -17,9 +17,10 @@ Instrumented Principal Component Analysis (IPCA) application to asset pricing ba
         - Common Factor Structure
     - The script can be executed fully at once or step by step.
     ``` python
-    python script.py
+    python main.py
     ```
 3. **Test IPCA model results** (example usage)
+    - Once an IPCA model has been estimated, it can be analyzed as described below.
     ``` python
     model.r2 # R2 on Asset (Rr2) and Managed-Portfolio Level (Rx2)
 
