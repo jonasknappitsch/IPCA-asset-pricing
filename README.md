@@ -7,6 +7,7 @@ Instrumented Principal Component Analysis (IPCA) application to asset pricing ba
     pip install -r requirements.txt
     ```
 2. **Run main.py** 
+    - At startup, the script requires a WRDS login. 
     - The script attempts to download the required datasets automatically from their sources. In case if issues, download manually and provide under `data/{dataset}/`.
         - **fnw**: Freyberger, Neuhierl and Weber "Dissecting Characteristics Nonparametrically" (2017), as used by Kelly, Pruitt and Su (2019) "Characteristics are Covariances"
         [Data Source](https://sethpruitt.net/2019/12/01/characteristics-are-covariances/)
